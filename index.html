@@ -1,1068 +1,1053 @@
-import React, { useState, useRef, useEffect } from 'react';
-import {
-  Upload, Sparkles, Image as ImageIcon, Sliders, ArrowRight, CheckCircle2,
-  Lock, RefreshCw, Download, Zap, Eye, ShieldCheck, Layers, FileText,
-  Settings, AlertTriangle, Code, ChevronRight, Moon, Sun, Info, Check, ZoomIn, ZoomOut
-} from 'lucide-react';
-
-// Core API configuration for Gemini vision-based photo restoration bridge
-const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image:generateContent";
-
-/**
- * Advanced Client-side Canvas Image Processing Engine
- * Performs real sharpening, noise reduction, detail enhancement, and upscaling directly in the browser
- */
-class LocalEnhancementEngine {
-  static async processImage(imageSrc, options, onProgress) {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.crossOrigin = "Anonymous";
-      img.onerror = () => reject(new Error("Failed to load input image."));
-      img.onload = async () => {
-        try {
-          // Step 1: Initialization
-          onProgress(15, "Analyzing image structure & facial boundary matrix...");
-          await new Promise(r => setTimeout(r, 400));
-
-          const scale = options.upscale === '4x' ? 4 : 2;
-          const targetWidth = img.naturalWidth * scale;
-          const targetHeight = img.naturalHeight * scale;
-
-          // Step 2: Denoise & Base Scaling Canvas
-          onProgress(35, `Applying ${options.noiseReduction} spatial noise reduction...`);
-          await new Promise(r => setTimeout(r, 400));
-
-          const offscreenCanvas = document.createElement('canvas');
-          offscreenCanvas.width = targetWidth;
-          offscreenCanvas.height = targetHeight;
-          const ctx = offscreenCanvas.getContext('2d');
-
-          // Multi-step high quality down/up scaling for smooth interpolation
-          ctx.imageSmoothingEnabled = true;
-          ctx.imageSmoothingQuality = 'high';
-          ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
-
-          // Step 3: Extract Pixel Data for Unsharp Mask & Deblurring
-          onProgress(60, "Performing unsharp mask deblurring & detail recovery...");
-          await new Promise(r => setTimeout(r, 500));
-
-          const imageData = ctx.getImageData(0, 0, targetWidth, targetHeight);
-          const data = imageData.data;
-          const width = targetWidth;
-          const height = targetHeight;
-
-          // Sharpness factor based on enhancement level setting
-          let sharpFactor = 0.35;
-          if (options.enhancement === 'balanced') sharpFactor = 0.65;
-          if (options.enhancement === 'high') sharpFactor = 0.95;
-
-          // Perform Laplacian Unsharp Mask Kernel in 3x3 window
-          const copyData = new Uint8ClampedArray(data);
-          
-          for (let y = 1; y < height - 1; y++) {
-            for (let x = 1; x < width - 1; x++) {
-              const idx = (y * width + x) * 4;
-
-              // Process R, G, B channels individually while preserving original identity color balance
-              for (let c = 0; c < 3; c++) {
-                const center = copyData[idx + c];
-                const top = copyData[((y - 1) * width + x) * 4 + c];
-                const bottom = copyData[((y + 1) * width + x) * 4 + c];
-                const left = copyData[(y * width + (x - 1)) * 4 + c];
-                const right = copyData[(y * width + (x + 1)) * 4 + c];
-
-                // Laplacian edge detection response
-                const laplacian = (4 * center) - (top + bottom + left + right);
-                
-                // Enhance high-frequency components without breaking skin tone continuity
-                let newVal = center + (laplacian * sharpFactor);
-                data[idx + c] = Math.min(255, Math.max(0, newVal));
-              }
+<!DOCTYPE html>
+<html lang="id" class="dark"><head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PRO OFFICE WORKSPACE - Professional Digital Workspace Simulation</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        darkbg: '#0f172a',
+                        darkcard: '#1e293b',
+                        darkborder: '#334155',
+                        accentblue: '#3b82f6',
+                        accenthover: '#2563eb'
+                    }
+                }
             }
-          }
-
-          ctx.putImageData(imageData, 0, 0);
-
-          // Step 4: Facial Identity Preservation Safeguard & Contrast Balance
-          onProgress(85, "Preserving facial structures & balancing skin tone fidelity...");
-          await new Promise(r => setTimeout(r, 400));
-
-          // Apply slight curve adjustment for clarity
-          ctx.globalCompositeOperation = 'overlay';
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.03)';
-          ctx.fillRect(0, 0, targetWidth, targetHeight);
-          ctx.globalCompositeOperation = 'source-over';
-
-          // Step 5: Finalization
-          onProgress(100, "Finalizing high-definition output...");
-          await new Promise(r => setTimeout(r, 300));
-
-          const resultDataUrl = offscreenCanvas.toDataURL('image/png', 0.98);
-          resolve({
-            dataUrl: resultDataUrl,
-            width: targetWidth,
-            height: targetHeight,
-            engine: "Client Canvas Engine"
-          });
-        } catch (err) {
-          reject(err);
         }
-      };
-      img.src = imageSrc;
-    });
-  }
-}
-
-export default function App() {
-  // Theme State
-  const [theme, setTheme] = useState('dark');
-
-  // File & Image States
-  const [selectedFile, setSelectedFile] = useState(null);
-  const [originalImage, setOriginalImage] = useState(null);
-  const [enhancedImage, setEnhancedImage] = useState(null);
-  const [imageMeta, setImageMeta] = useState(null);
-
-  // Settings State
-  const [settings, setSettings] = useState({
-    enhancement: 'natural', // 'natural', 'balanced', 'high'
-    upscale: '2x',           // '2x', '4x'
-    noiseReduction: 'medium',// 'low', 'medium', 'high'
-    facePreservation: 'maximum', // 'maximum'
-    engine: 'canvas'         // 'canvas', 'gemini', 'api'
-  });
-
-  // API Key state for Gemini Mode option
-  const [geminiApiKey, setGeminiApiKey] = useState('');
-
-  // Processing State
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [progressPercent, setProgressPercent] = useState(0);
-  const [progressMessage, setProgressMessage] = useState('');
-  const [processingLogs, setProcessingLogs] = useState([]);
-  const [errorMsg, setErrorMsg] = useState(null);
-
-  // UI States
-  const [sliderPosition, setSliderPosition] = useState(50);
-  const [isDraggingSlider, setIsDraggingSlider] = useState(false);
-  const [activeTab, setActiveTab] = useState('app'); // 'app', 'docs', 'privacy'
-  const [viewMode, setViewMode] = useState('split'); // 'split', 'side'
-  const [downloadFormat, setDownloadFormat] = useState('png');
-
-  // Refs
-  const sliderRef = useRef(null);
-  const fileInputRef = useRef(null);
-
-  const toggleTheme = () => {
-    setTheme(prev => prev === 'dark' ? 'light' : 'dark');
-  };
-
-  const handleFileSelect = (file) => {
-    setErrorMsg(null);
-    if (!file) return;
-
-    // Validate size (10 MB max)
-    const MAX_SIZE = 10 * 1024 * 1024;
-    if (file.size > MAX_SIZE) {
-      setErrorMsg("File size exceeds 10 MB limit. Please select a smaller photo.");
-      return;
-    }
-
-    // Validate file type
-    const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
-    if (!validTypes.includes(file.type)) {
-      setErrorMsg("Unsupported image format. Please upload JPG, PNG, or WebP.");
-      return;
-    }
-
-    setSelectedFile(file);
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const dataUrl = e.target.result;
-      const img = new Image();
-      img.onload = () => {
-        setOriginalImage(dataUrl);
-        setEnhancedImage(null);
-        setImageMeta({
-          name: file.name,
-          size: (file.size / (1024 * 1024)).toFixed(2) + " MB",
-          width: img.naturalWidth,
-          height: img.naturalHeight,
-          type: file.type.split('/')[1].toUpperCase()
-        });
-      };
-      img.onerror = () => {
-        setErrorMsg("Failed to read image file. The photo may be corrupted.");
-      };
-      img.src = dataUrl;
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handleDrop = (e) => {
-    e.preventDefault();
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      handleFileSelect(e.dataTransfer.files[0]);
-    }
-  };
-
-  const handleDragOver = (e) => {
-    e.preventDefault();
-  };
-
-  const runEnhancement = async () => {
-    if (!originalImage) return;
-    setIsProcessing(true);
-    setProgressPercent(5);
-    setProgressMessage("Initializing enhancement engine...");
-    setProcessingLogs(["[00:00] Initialized photo processing worker."]);
-    setErrorMsg(null);
-
-    const log = (msg) => {
-      setProcessingLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`]);
-    };
-
-    try {
-      if (settings.engine === 'canvas') {
-        log("Selected engine: Local High-Precision Canvas DSP Pipeline");
-        const result = await LocalEnhancementEngine.processImage(
-          originalImage,
-          settings,
-          (percent, msg) => {
-            setProgressPercent(percent);
-            setProgressMessage(msg);
-            log(msg);
-          }
-        );
-        setEnhancedImage(result.dataUrl);
-        log("Enhancement complete. Output generated with face identity lock.");
-      } 
-      else if (settings.engine === 'gemini') {
-        log("Selected engine: Gemini 3.1 Flash Vision AI Enhance Engine");
-        setProgressPercent(20);
-        setProgressMessage("Connecting to Gemini Vision Restoration model...");
-        
-        // Strip base64 prefix
-        const base64Data = originalImage.split(',')[1];
-        
-        const systemPrompt = "You are a non-generative, identity-preserving photo restoration model. " +
-          "Enhance this photo's clarity, remove blur and noise, sharpness, and upscale resolution. " +
-          "STRICT REQUIREMENT: Do NOT change the facial structure, eyes, nose, mouth, skin tone, or identity of the person in the photo. " +
-          "Keep facial geometry 100% authentic to the original photo.";
-
-        const payload = {
-          contents: [{
-            role: "user",
-            parts: [
-              { text: `${systemPrompt} Enhancement level: ${settings.enhancement}. Noise reduction: ${settings.noiseReduction}.` },
-              { inlineData: { mimeType: selectedFile?.type || "image/jpeg", data: base64Data } }
-            ]
-          }],
-          generationConfig: {
-            responseModalities: ["IMAGE"]
-          }
-        };
-
-        setProgressPercent(50);
-        setProgressMessage("Sending tensor payload to AI Cloud GPU...");
-        log("Transmitting payload to Gemini API endpoint...");
-
-        const url = `${GEMINI_API_URL}?key=${geminiApiKey}`;
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-
-        if (!response.ok) {
-          const errText = await response.text();
-          throw new Error(`API Error (${response.status}): ${errText.slice(0, 150)}`);
+    </script>
+    <!-- Font Inter & Lucide/FontAwesome Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            user-select: none;
+            overflow: hidden;
         }
-
-        setProgressPercent(80);
-        setProgressMessage("Receiving restored image stream...");
-        const resJson = await response.json();
-        
-        const part = resJson?.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
-        if (part && part.inlineData) {
-          const mime = part.inlineData.mimeType || 'image/png';
-          const newUrl = `data:${mime};base64,${part.inlineData.data}`;
-          setEnhancedImage(newUrl);
-          setProgressPercent(100);
-          log("Gemini AI enhancement finished successfully.");
-        } else {
-          throw new Error("No image output returned from AI model. Falling back to Local Engine.");
+        .code-font {
+            font-family: 'JetBrains Mono', monospace;
         }
-      }
-      else if (settings.engine === 'api') {
-        log("Selected engine: Backend External Real-ESRGAN / SwinIR API");
-        setProgressPercent(25);
-        setProgressMessage("Connecting to POST /api/enhance...");
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+        /* Simulated Cursor */
+        #simulated-cursor {
+            pointer-events: none;
+            transition: transform 0.8s cubic-bezier(0.25, 1, 0.5, 1), top 0.8s cubic-bezier(0.25, 1, 0.5, 1), left 0.8s cubic-bezier(0.25, 1, 0.5, 1);
+            z-index: 99999;
+        }
+        /* Window Glassmorphism & Shadow */
+        .app-window {
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+            border: 1px solid rgba(51, 65, 85, 0.6);
+            transition: box-shadow 0.2s ease;
+        }
+        .app-window.active {
+            box-shadow: 0 25px 50px -12px rgba(59, 130, 246, 0.25), 0 0 0 1px rgba(59, 130, 246, 0.4);
+        }
+        @keyframes pulse-slow {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+        .animate-pulse-slow {
+            animation: pulse-slow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+    </style>
+<style>*, ::before, ::after{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgb(59 130 246 / 0.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }::backdrop{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgb(59 130 246 / 0.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }/* ! tailwindcss v3.4.17 | MIT License | https://tailwindcss.com */*,::after,::before{box-sizing:border-box;border-width:0;border-style:solid;border-color:#e5e7eb}::after,::before{--tw-content:''}:host,html{line-height:1.5;-webkit-text-size-adjust:100%;-moz-tab-size:4;tab-size:4;font-family:ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";font-feature-settings:normal;font-variation-settings:normal;-webkit-tap-highlight-color:transparent}body{margin:0;line-height:inherit}hr{height:0;color:inherit;border-top-width:1px}abbr:where([title]){-webkit-text-decoration:underline dotted;text-decoration:underline dotted}h1,h2,h3,h4,h5,h6{font-size:inherit;font-weight:inherit}a{color:inherit;text-decoration:inherit}b,strong{font-weight:bolder}code,kbd,pre,samp{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;font-feature-settings:normal;font-variation-settings:normal;font-size:1em}small{font-size:80%}sub,sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline}sub{bottom:-.25em}sup{top:-.5em}table{text-indent:0;border-color:inherit;border-collapse:collapse}button,input,optgroup,select,textarea{font-family:inherit;font-feature-settings:inherit;font-variation-settings:inherit;font-size:100%;font-weight:inherit;line-height:inherit;letter-spacing:inherit;color:inherit;margin:0;padding:0}button,select{text-transform:none}button,input:where([type=button]),input:where([type=reset]),input:where([type=submit]){-webkit-appearance:button;background-color:transparent;background-image:none}:-moz-focusring{outline:auto}:-moz-ui-invalid{box-shadow:none}progress{vertical-align:baseline}::-webkit-inner-spin-button,::-webkit-outer-spin-button{height:auto}[type=search]{-webkit-appearance:textfield;outline-offset:-2px}::-webkit-search-decoration{-webkit-appearance:none}::-webkit-file-upload-button{-webkit-appearance:button;font:inherit}summary{display:list-item}blockquote,dd,dl,figure,h1,h2,h3,h4,h5,h6,hr,p,pre{margin:0}fieldset{margin:0;padding:0}legend{padding:0}menu,ol,ul{list-style:none;margin:0;padding:0}dialog{padding:0}textarea{resize:vertical}input::placeholder,textarea::placeholder{opacity:1;color:#9ca3af}[role=button],button{cursor:pointer}:disabled{cursor:default}audio,canvas,embed,iframe,img,object,svg,video{display:block;vertical-align:middle}img,video{max-width:100%;height:auto}[hidden]:where(:not([hidden=until-found])){display:none}.pointer-events-none{pointer-events:none}.fixed{position:fixed}.absolute{position:absolute}.relative{position:relative}.sticky{position:sticky}.inset-0{inset:0px}.bottom-12{bottom:3rem}.bottom-8{bottom:2rem}.left-1\/2{left:50%}.left-12{left:3rem}.left-4{left:1rem}.left-64{left:16rem}.right-16{right:4rem}.right-2\.5{right:0.625rem}.right-6{right:1.5rem}.right-8{right:2rem}.top-0{top:0px}.top-1\/2{top:50%}.top-16{top:4rem}.top-2{top:0.5rem}.top-20{top:5rem}.top-4{top:1rem}.top-8{top:2rem}.z-0{z-index:0}.z-10{z-index:10}.z-20{z-index:20}.z-30{z-index:30}.z-50{z-index:50}.z-\[99999\]{z-index:99999}.my-3{margin-top:0.75rem;margin-bottom:0.75rem}.my-auto{margin-top:auto;margin-bottom:auto}.mb-1{margin-bottom:0.25rem}.mb-2{margin-bottom:0.5rem}.mr-1{margin-right:0.25rem}.mr-1\.5{margin-right:0.375rem}.mr-2{margin-right:0.5rem}.mt-4{margin-top:1rem}.mt-0\.5{margin-top:0.125rem}.mb-4{margin-bottom:1rem}.mt-6{margin-top:1.5rem}.block{display:block}.flex{display:flex}.grid{display:grid}.hidden{display:none}.h-12{height:3rem}.h-16{height:4rem}.h-2\.5{height:0.625rem}.h-4{height:1rem}.h-6{height:1.5rem}.h-8{height:2rem}.h-\[360px\]{height:360px}.h-\[380px\]{height:380px}.h-\[520px\]{height:520px}.h-\[540px\]{height:540px}.h-\[580px\]{height:580px}.h-screen{height:100vh}.min-h-\[600px\]{min-height:600px}.w-12{width:3rem}.w-2\.5{width:0.625rem}.w-24{width:6rem}.w-36{width:9rem}.w-4{width:1rem}.w-44{width:11rem}.w-48{width:12rem}.w-5{width:1.25rem}.w-6{width:1.5rem}.w-72{width:18rem}.w-8{width:2rem}.w-\[420px\]{width:420px}.w-\[480px\]{width:480px}.w-\[680px\]{width:680px}.w-\[720px\]{width:720px}.w-\[760px\]{width:760px}.w-full{width:100%}.w-px{width:1px}.w-screen{width:100vw}.max-w-lg{max-width:32rem}.max-w-md{max-width:28rem}.max-w-xl{max-width:36rem}.max-w-\[150px\]{max-width:150px}.flex-1{flex:1 1 0%}.border-collapse{border-collapse:collapse}.translate-x-96{--tw-translate-x:24rem;transform:translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}.transform{transform:translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}@keyframes ping{75%, 100%{transform:scale(2);opacity:0}}.animate-ping{animation:ping 1s cubic-bezier(0, 0, 0.2, 1) infinite}@keyframes pulse{50%{opacity:.5}}.animate-pulse{animation:pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite}.cursor-move{cursor:move}.cursor-pointer{cursor:pointer}.select-none{-webkit-user-select:none;user-select:none}.list-disc{list-style-type:disc}.grid-cols-2{grid-template-columns:repeat(2, minmax(0, 1fr))}.flex-col{flex-direction:column}.items-center{align-items:center}.justify-end{justify-content:flex-end}.justify-center{justify-content:center}.justify-between{justify-content:space-between}.gap-3{gap:0.75rem}.space-x-1 > :not([hidden]) ~ :not([hidden]){--tw-space-x-reverse:0;margin-right:calc(0.25rem * var(--tw-space-x-reverse));margin-left:calc(0.25rem * calc(1 - var(--tw-space-x-reverse)))}.space-x-1\.5 > :not([hidden]) ~ :not([hidden]){--tw-space-x-reverse:0;margin-right:calc(0.375rem * var(--tw-space-x-reverse));margin-left:calc(0.375rem * calc(1 - var(--tw-space-x-reverse)))}.space-x-2 > :not([hidden]) ~ :not([hidden]){--tw-space-x-reverse:0;margin-right:calc(0.5rem * var(--tw-space-x-reverse));margin-left:calc(0.5rem * calc(1 - var(--tw-space-x-reverse)))}.space-x-3 > :not([hidden]) ~ :not([hidden]){--tw-space-x-reverse:0;margin-right:calc(0.75rem * var(--tw-space-x-reverse));margin-left:calc(0.75rem * calc(1 - var(--tw-space-x-reverse)))}.space-x-4 > :not([hidden]) ~ :not([hidden]){--tw-space-x-reverse:0;margin-right:calc(1rem * var(--tw-space-x-reverse));margin-left:calc(1rem * calc(1 - var(--tw-space-x-reverse)))}.space-y-1 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(0.25rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(0.25rem * var(--tw-space-y-reverse))}.space-y-2 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(0.5rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(0.5rem * var(--tw-space-y-reverse))}.space-y-3 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(0.75rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(0.75rem * var(--tw-space-y-reverse))}.space-y-4 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(1rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(1rem * var(--tw-space-y-reverse))}.space-y-5 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(1.25rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(1.25rem * var(--tw-space-y-reverse))}.overflow-auto{overflow:auto}.overflow-hidden{overflow:hidden}.overflow-y-auto{overflow-y:auto}.truncate{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.whitespace-pre-wrap{white-space:pre-wrap}.rounded{border-radius:0.25rem}.rounded-2xl{border-radius:1rem}.rounded-full{border-radius:9999px}.rounded-lg{border-radius:0.5rem}.rounded-xl{border-radius:0.75rem}.border{border-width:1px}.border-b{border-bottom-width:1px}.border-l{border-left-width:1px}.border-l-4{border-left-width:4px}.border-r{border-right-width:1px}.border-t{border-top-width:1px}.border-amber-500{--tw-border-opacity:1;border-color:rgb(245 158 11 / var(--tw-border-opacity, 1))}.border-blue-500{--tw-border-opacity:1;border-color:rgb(59 130 246 / var(--tw-border-opacity, 1))}.border-blue-500\/30{border-color:rgb(59 130 246 / 0.3)}.border-emerald-500{--tw-border-opacity:1;border-color:rgb(16 185 129 / var(--tw-border-opacity, 1))}.border-purple-500{--tw-border-opacity:1;border-color:rgb(168 85 247 / var(--tw-border-opacity, 1))}.border-slate-700{--tw-border-opacity:1;border-color:rgb(51 65 85 / var(--tw-border-opacity, 1))}.border-slate-700\/80{border-color:rgb(51 65 85 / 0.8)}.border-slate-800{--tw-border-opacity:1;border-color:rgb(30 41 59 / var(--tw-border-opacity, 1))}.border-slate-800\/80{border-color:rgb(30 41 59 / 0.8)}.bg-\[\#0b0f19\]{--tw-bg-opacity:1;background-color:rgb(11 15 25 / var(--tw-bg-opacity, 1))}.bg-\[\#0d131f\]{--tw-bg-opacity:1;background-color:rgb(13 19 31 / var(--tw-bg-opacity, 1))}.bg-\[\#0f172a\]{--tw-bg-opacity:1;background-color:rgb(15 23 42 / var(--tw-bg-opacity, 1))}.bg-\[\#111827\]{--tw-bg-opacity:1;background-color:rgb(17 24 39 / var(--tw-bg-opacity, 1))}.bg-\[\#111827\]\/80{background-color:rgb(17 24 39 / 0.8)}.bg-\[\#111827\]\/90{background-color:rgb(17 24 39 / 0.9)}.bg-\[\#131d2e\]{--tw-bg-opacity:1;background-color:rgb(19 29 46 / var(--tw-bg-opacity, 1))}.bg-\[\#182234\]{--tw-bg-opacity:1;background-color:rgb(24 34 52 / var(--tw-bg-opacity, 1))}.bg-\[\#1a2333\]{--tw-bg-opacity:1;background-color:rgb(26 35 51 / var(--tw-bg-opacity, 1))}.bg-\[\#1e293b\]{--tw-bg-opacity:1;background-color:rgb(30 41 59 / var(--tw-bg-opacity, 1))}.bg-amber-500\/20{background-color:rgb(245 158 11 / 0.2)}.bg-amber-600{--tw-bg-opacity:1;background-color:rgb(217 119 6 / var(--tw-bg-opacity, 1))}.bg-black\/70{background-color:rgb(0 0 0 / 0.7)}.bg-blue-600{--tw-bg-opacity:1;background-color:rgb(37 99 235 / var(--tw-bg-opacity, 1))}.bg-blue-600\/20{background-color:rgb(37 99 235 / 0.2)}.bg-emerald-500{--tw-bg-opacity:1;background-color:rgb(16 185 129 / var(--tw-bg-opacity, 1))}.bg-emerald-500\/20{background-color:rgb(16 185 129 / 0.2)}.bg-emerald-600{--tw-bg-opacity:1;background-color:rgb(5 150 105 / var(--tw-bg-opacity, 1))}.bg-slate-700{--tw-bg-opacity:1;background-color:rgb(51 65 85 / var(--tw-bg-opacity, 1))}.bg-slate-800{--tw-bg-opacity:1;background-color:rgb(30 41 59 / var(--tw-bg-opacity, 1))}.bg-slate-800\/80{background-color:rgb(30 41 59 / 0.8)}.bg-slate-900{--tw-bg-opacity:1;background-color:rgb(15 23 42 / var(--tw-bg-opacity, 1))}.bg-slate-900\/60{background-color:rgb(15 23 42 / 0.6)}.bg-transparent{background-color:transparent}.bg-white{--tw-bg-opacity:1;background-color:rgb(255 255 255 / var(--tw-bg-opacity, 1))}.bg-\[\#141d2e\]{--tw-bg-opacity:1;background-color:rgb(20 29 46 / var(--tw-bg-opacity, 1))}.bg-blue-600\/10{background-color:rgb(37 99 235 / 0.1)}.bg-gradient-to-br{background-image:linear-gradient(to bottom right, var(--tw-gradient-stops))}.from-\[\#090d16\]{--tw-gradient-from:#090d16 var(--tw-gradient-from-position);--tw-gradient-to:rgb(9 13 22 / 0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from), var(--tw-gradient-to)}.via-\[\#111827\]{--tw-gradient-to:rgb(17 24 39 / 0)  var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from), #111827 var(--tw-gradient-via-position), var(--tw-gradient-to)}.to-\[\#0f172a\]{--tw-gradient-to:#0f172a var(--tw-gradient-to-position)}.p-1\.5{padding:0.375rem}.p-2{padding:0.5rem}.p-2\.5{padding:0.625rem}.p-3{padding:0.75rem}.p-4{padding:1rem}.p-5{padding:1.25rem}.p-6{padding:1.5rem}.p-8{padding:2rem}.px-1\.5{padding-left:0.375rem;padding-right:0.375rem}.px-2{padding-left:0.5rem;padding-right:0.5rem}.px-2\.5{padding-left:0.625rem;padding-right:0.625rem}.px-3{padding-left:0.75rem;padding-right:0.75rem}.px-4{padding-left:1rem;padding-right:1rem}.px-6{padding-left:1.5rem;padding-right:1.5rem}.py-0\.5{padding-top:0.125rem;padding-bottom:0.125rem}.py-1{padding-top:0.25rem;padding-bottom:0.25rem}.py-1\.5{padding-top:0.375rem;padding-bottom:0.375rem}.py-2{padding-top:0.5rem;padding-bottom:0.5rem}.py-2\.5{padding-top:0.625rem;padding-bottom:0.625rem}.py-3{padding-top:0.75rem;padding-bottom:0.75rem}.pb-2{padding-bottom:0.5rem}.pb-3{padding-bottom:0.75rem}.pl-4{padding-left:1rem}.pl-5{padding-left:1.25rem}.pt-3{padding-top:0.75rem}.text-left{text-align:left}.text-center{text-align:center}.text-right{text-align:right}.font-mono{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace}.font-sans{font-family:ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"}.text-2xl{font-size:1.5rem;line-height:2rem}.text-4xl{font-size:2.25rem;line-height:2.5rem}.text-\[10px\]{font-size:10px}.text-\[11px\]{font-size:11px}.text-\[8px\]{font-size:8px}.text-lg{font-size:1.125rem;line-height:1.75rem}.text-sm{font-size:0.875rem;line-height:1.25rem}.text-xl{font-size:1.25rem;line-height:1.75rem}.text-xs{font-size:0.75rem;line-height:1rem}.font-bold{font-weight:700}.font-medium{font-weight:500}.font-semibold{font-weight:600}.leading-relaxed{line-height:1.625}.tracking-wider{letter-spacing:0.05em}.text-amber-400{--tw-text-opacity:1;color:rgb(251 191 36 / var(--tw-text-opacity, 1))}.text-blue-400{--tw-text-opacity:1;color:rgb(96 165 250 / var(--tw-text-opacity, 1))}.text-blue-500{--tw-text-opacity:1;color:rgb(59 130 246 / var(--tw-text-opacity, 1))}.text-blue-900{--tw-text-opacity:1;color:rgb(30 58 138 / var(--tw-text-opacity, 1))}.text-emerald-400{--tw-text-opacity:1;color:rgb(52 211 153 / var(--tw-text-opacity, 1))}.text-purple-400{--tw-text-opacity:1;color:rgb(192 132 252 / var(--tw-text-opacity, 1))}.text-red-400{--tw-text-opacity:1;color:rgb(248 113 113 / var(--tw-text-opacity, 1))}.text-slate-100{--tw-text-opacity:1;color:rgb(241 245 249 / var(--tw-text-opacity, 1))}.text-slate-200{--tw-text-opacity:1;color:rgb(226 232 240 / var(--tw-text-opacity, 1))}.text-slate-300{--tw-text-opacity:1;color:rgb(203 213 225 / var(--tw-text-opacity, 1))}.text-slate-400{--tw-text-opacity:1;color:rgb(148 163 184 / var(--tw-text-opacity, 1))}.text-slate-500{--tw-text-opacity:1;color:rgb(100 116 139 / var(--tw-text-opacity, 1))}.text-slate-900{--tw-text-opacity:1;color:rgb(15 23 42 / var(--tw-text-opacity, 1))}.text-white{--tw-text-opacity:1;color:rgb(255 255 255 / var(--tw-text-opacity, 1))}.accent-blue-600{accent-color:#2563eb}.shadow{--tw-shadow:0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);--tw-shadow-colored:0 1px 3px 0 var(--tw-shadow-color), 0 1px 2px -1px var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)}.shadow-2xl{--tw-shadow:0 25px 50px -12px rgb(0 0 0 / 0.25);--tw-shadow-colored:0 25px 50px -12px var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)}.shadow-lg{--tw-shadow:0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);--tw-shadow-colored:0 10px 15px -3px var(--tw-shadow-color), 0 4px 6px -4px var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)}.shadow-amber-600\/30{--tw-shadow-color:rgb(217 119 6 / 0.3);--tw-shadow:var(--tw-shadow-colored)}.shadow-blue-600\/30{--tw-shadow-color:rgb(37 99 235 / 0.3);--tw-shadow:var(--tw-shadow-colored)}.shadow-emerald-600\/30{--tw-shadow-color:rgb(5 150 105 / 0.3);--tw-shadow:var(--tw-shadow-colored)}.outline-none{outline:2px solid transparent;outline-offset:2px}.drop-shadow-2xl{--tw-drop-shadow:drop-shadow(0 25px 25px rgb(0 0 0 / 0.15));filter:var(--tw-blur) var(--tw-brightness) var(--tw-contrast) var(--tw-grayscale) var(--tw-hue-rotate) var(--tw-invert) var(--tw-saturate) var(--tw-sepia) var(--tw-drop-shadow)}.drop-shadow-md{--tw-drop-shadow:drop-shadow(0 4px 3px rgb(0 0 0 / 0.07)) drop-shadow(0 2px 2px rgb(0 0 0 / 0.06));filter:var(--tw-blur) var(--tw-brightness) var(--tw-contrast) var(--tw-grayscale) var(--tw-hue-rotate) var(--tw-invert) var(--tw-saturate) var(--tw-sepia) var(--tw-drop-shadow)}.backdrop-blur-md{--tw-backdrop-blur:blur(12px);-webkit-backdrop-filter:var(--tw-backdrop-blur) var(--tw-backdrop-brightness) var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate) var(--tw-backdrop-sepia);backdrop-filter:var(--tw-backdrop-blur) var(--tw-backdrop-brightness) var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate) var(--tw-backdrop-sepia)}.backdrop-blur-sm{--tw-backdrop-blur:blur(4px);-webkit-backdrop-filter:var(--tw-backdrop-blur) var(--tw-backdrop-brightness) var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate) var(--tw-backdrop-sepia);backdrop-filter:var(--tw-backdrop-blur) var(--tw-backdrop-brightness) var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate) var(--tw-backdrop-sepia)}.transition{transition-property:color, background-color, border-color, fill, stroke, opacity, box-shadow, transform, filter, -webkit-text-decoration-color, -webkit-backdrop-filter;transition-property:color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter;transition-property:color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter, -webkit-text-decoration-color, -webkit-backdrop-filter;transition-timing-function:cubic-bezier(0.4, 0, 0.2, 1);transition-duration:150ms}.transition-all{transition-property:all;transition-timing-function:cubic-bezier(0.4, 0, 0.2, 1);transition-duration:150ms}.transition-opacity{transition-property:opacity;transition-timing-function:cubic-bezier(0.4, 0, 0.2, 1);transition-duration:150ms}.duration-300{transition-duration:300ms}.duration-500{transition-duration:500ms}.selection\:bg-blue-200 *::selection{--tw-bg-opacity:1;background-color:rgb(191 219 254 / var(--tw-bg-opacity, 1))}.selection\:bg-blue-200::selection{--tw-bg-opacity:1;background-color:rgb(191 219 254 / var(--tw-bg-opacity, 1))}.hover\:bg-amber-500:hover{--tw-bg-opacity:1;background-color:rgb(245 158 11 / var(--tw-bg-opacity, 1))}.hover\:bg-blue-500:hover{--tw-bg-opacity:1;background-color:rgb(59 130 246 / var(--tw-bg-opacity, 1))}.hover\:bg-emerald-500:hover{--tw-bg-opacity:1;background-color:rgb(16 185 129 / var(--tw-bg-opacity, 1))}.hover\:bg-slate-700:hover{--tw-bg-opacity:1;background-color:rgb(51 65 85 / var(--tw-bg-opacity, 1))}.hover\:bg-slate-800:hover{--tw-bg-opacity:1;background-color:rgb(30 41 59 / var(--tw-bg-opacity, 1))}.hover\:bg-slate-800\/60:hover{background-color:rgb(30 41 59 / 0.6)}.hover\:bg-slate-800\/40:hover{background-color:rgb(30 41 59 / 0.4)}.hover\:bg-slate-800\/50:hover{background-color:rgb(30 41 59 / 0.5)}.hover\:text-red-400:hover{--tw-text-opacity:1;color:rgb(248 113 113 / var(--tw-text-opacity, 1))}.hover\:text-white:hover{--tw-text-opacity:1;color:rgb(255 255 255 / var(--tw-text-opacity, 1))}.focus\:border-blue-500:focus{--tw-border-opacity:1;border-color:rgb(59 130 246 / var(--tw-border-opacity, 1))}.focus\:outline-none:focus{outline:2px solid transparent;outline-offset:2px}@media (min-width: 640px){.sm\:block{display:block}}@media (min-width: 768px){.md\:flex{display:flex}}@media (min-width: 1024px){.lg\:flex{display:flex}}</style><style>*, ::before, ::after{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgb(59 130 246 / 0.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }::backdrop{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgb(59 130 246 / 0.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }/* ! tailwindcss v3.4.17 | MIT License | https://tailwindcss.com */*,::after,::before{box-sizing:border-box;border-width:0;border-style:solid;border-color:#e5e7eb}::after,::before{--tw-content:''}:host,html{line-height:1.5;-webkit-text-size-adjust:100%;-moz-tab-size:4;tab-size:4;font-family:ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";font-feature-settings:normal;font-variation-settings:normal;-webkit-tap-highlight-color:transparent}body{margin:0;line-height:inherit}hr{height:0;color:inherit;border-top-width:1px}abbr:where([title]){-webkit-text-decoration:underline dotted;text-decoration:underline dotted}h1,h2,h3,h4,h5,h6{font-size:inherit;font-weight:inherit}a{color:inherit;text-decoration:inherit}b,strong{font-weight:bolder}code,kbd,pre,samp{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;font-feature-settings:normal;font-variation-settings:normal;font-size:1em}small{font-size:80%}sub,sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline}sub{bottom:-.25em}sup{top:-.5em}table{text-indent:0;border-color:inherit;border-collapse:collapse}button,input,optgroup,select,textarea{font-family:inherit;font-feature-settings:inherit;font-variation-settings:inherit;font-size:100%;font-weight:inherit;line-height:inherit;letter-spacing:inherit;color:inherit;margin:0;padding:0}button,select{text-transform:none}button,input:where([type=button]),input:where([type=reset]),input:where([type=submit]){-webkit-appearance:button;background-color:transparent;background-image:none}:-moz-focusring{outline:auto}:-moz-ui-invalid{box-shadow:none}progress{vertical-align:baseline}::-webkit-inner-spin-button,::-webkit-outer-spin-button{height:auto}[type=search]{-webkit-appearance:textfield;outline-offset:-2px}::-webkit-search-decoration{-webkit-appearance:none}::-webkit-file-upload-button{-webkit-appearance:button;font:inherit}summary{display:list-item}blockquote,dd,dl,figure,h1,h2,h3,h4,h5,h6,hr,p,pre{margin:0}fieldset{margin:0;padding:0}legend{padding:0}menu,ol,ul{list-style:none;margin:0;padding:0}dialog{padding:0}textarea{resize:vertical}input::placeholder,textarea::placeholder{opacity:1;color:#9ca3af}[role=button],button{cursor:pointer}:disabled{cursor:default}audio,canvas,embed,iframe,img,object,svg,video{display:block;vertical-align:middle}img,video{max-width:100%;height:auto}[hidden]:where(:not([hidden=until-found])){display:none}.pointer-events-none{pointer-events:none}.fixed{position:fixed}.absolute{position:absolute}.relative{position:relative}.sticky{position:sticky}.inset-0{inset:0px}.bottom-12{bottom:3rem}.bottom-8{bottom:2rem}.left-1\/2{left:50%}.left-12{left:3rem}.left-4{left:1rem}.left-64{left:16rem}.right-16{right:4rem}.right-2\.5{right:0.625rem}.right-6{right:1.5rem}.right-8{right:2rem}.top-0{top:0px}.top-1\/2{top:50%}.top-16{top:4rem}.top-2{top:0.5rem}.top-20{top:5rem}.top-4{top:1rem}.top-8{top:2rem}.z-0{z-index:0}.z-10{z-index:10}.z-20{z-index:20}.z-30{z-index:30}.z-50{z-index:50}.z-\[99999\]{z-index:99999}.my-3{margin-top:0.75rem;margin-bottom:0.75rem}.mb-1{margin-bottom:0.25rem}.mb-4{margin-bottom:1rem}.mr-1{margin-right:0.25rem}.mr-1\.5{margin-right:0.375rem}.mr-2{margin-right:0.5rem}.mt-0\.5{margin-top:0.125rem}.mt-4{margin-top:1rem}.mt-6{margin-top:1.5rem}.block{display:block}.flex{display:flex}.grid{display:grid}.hidden{display:none}.h-12{height:3rem}.h-16{height:4rem}.h-2\.5{height:0.625rem}.h-4{height:1rem}.h-6{height:1.5rem}.h-8{height:2rem}.h-\[360px\]{height:360px}.h-\[380px\]{height:380px}.h-\[520px\]{height:520px}.h-\[540px\]{height:540px}.h-\[580px\]{height:580px}.h-screen{height:100vh}.min-h-\[600px\]{min-height:600px}.w-12{width:3rem}.w-2\.5{width:0.625rem}.w-24{width:6rem}.w-36{width:9rem}.w-4{width:1rem}.w-44{width:11rem}.w-48{width:12rem}.w-5{width:1.25rem}.w-6{width:1.5rem}.w-72{width:18rem}.w-8{width:2rem}.w-\[420px\]{width:420px}.w-\[480px\]{width:480px}.w-\[680px\]{width:680px}.w-\[720px\]{width:720px}.w-\[760px\]{width:760px}.w-full{width:100%}.w-px{width:1px}.w-screen{width:100vw}.max-w-\[150px\]{max-width:150px}.max-w-lg{max-width:32rem}.max-w-md{max-width:28rem}.max-w-xl{max-width:36rem}.flex-1{flex:1 1 0%}.border-collapse{border-collapse:collapse}.transform{transform:translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}@keyframes ping{75%, 100%{transform:scale(2);opacity:0}}.animate-ping{animation:ping 1s cubic-bezier(0, 0, 0.2, 1) infinite}@keyframes pulse{50%{opacity:.5}}.animate-pulse{animation:pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite}.cursor-move{cursor:move}.cursor-pointer{cursor:pointer}.select-none{-webkit-user-select:none;user-select:none}.list-disc{list-style-type:disc}.grid-cols-2{grid-template-columns:repeat(2, minmax(0, 1fr))}.flex-col{flex-direction:column}.items-center{align-items:center}.justify-end{justify-content:flex-end}.justify-center{justify-content:center}.justify-between{justify-content:space-between}.gap-3{gap:0.75rem}.space-x-1 > :not([hidden]) ~ :not([hidden]){--tw-space-x-reverse:0;margin-right:calc(0.25rem * var(--tw-space-x-reverse));margin-left:calc(0.25rem * calc(1 - var(--tw-space-x-reverse)))}.space-x-1\.5 > :not([hidden]) ~ :not([hidden]){--tw-space-x-reverse:0;margin-right:calc(0.375rem * var(--tw-space-x-reverse));margin-left:calc(0.375rem * calc(1 - var(--tw-space-x-reverse)))}.space-x-2 > :not([hidden]) ~ :not([hidden]){--tw-space-x-reverse:0;margin-right:calc(0.5rem * var(--tw-space-x-reverse));margin-left:calc(0.5rem * calc(1 - var(--tw-space-x-reverse)))}.space-x-3 > :not([hidden]) ~ :not([hidden]){--tw-space-x-reverse:0;margin-right:calc(0.75rem * var(--tw-space-x-reverse));margin-left:calc(0.75rem * calc(1 - var(--tw-space-x-reverse)))}.space-x-4 > :not([hidden]) ~ :not([hidden]){--tw-space-x-reverse:0;margin-right:calc(1rem * var(--tw-space-x-reverse));margin-left:calc(1rem * calc(1 - var(--tw-space-x-reverse)))}.space-y-1 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(0.25rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(0.25rem * var(--tw-space-y-reverse))}.space-y-2 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(0.5rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(0.5rem * var(--tw-space-y-reverse))}.space-y-3 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(0.75rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(0.75rem * var(--tw-space-y-reverse))}.space-y-4 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(1rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(1rem * var(--tw-space-y-reverse))}.space-y-5 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(1.25rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(1.25rem * var(--tw-space-y-reverse))}.overflow-auto{overflow:auto}.overflow-hidden{overflow:hidden}.overflow-y-auto{overflow-y:auto}.truncate{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.whitespace-pre-wrap{white-space:pre-wrap}.rounded{border-radius:0.25rem}.rounded-2xl{border-radius:1rem}.rounded-full{border-radius:9999px}.rounded-lg{border-radius:0.5rem}.rounded-xl{border-radius:0.75rem}.border{border-width:1px}.border-b{border-bottom-width:1px}.border-l{border-left-width:1px}.border-l-4{border-left-width:4px}.border-r{border-right-width:1px}.border-t{border-top-width:1px}.border-amber-500{--tw-border-opacity:1;border-color:rgb(245 158 11 / var(--tw-border-opacity, 1))}.border-blue-500{--tw-border-opacity:1;border-color:rgb(59 130 246 / var(--tw-border-opacity, 1))}.border-blue-500\/30{border-color:rgb(59 130 246 / 0.3)}.border-emerald-500{--tw-border-opacity:1;border-color:rgb(16 185 129 / var(--tw-border-opacity, 1))}.border-purple-500{--tw-border-opacity:1;border-color:rgb(168 85 247 / var(--tw-border-opacity, 1))}.border-slate-700{--tw-border-opacity:1;border-color:rgb(51 65 85 / var(--tw-border-opacity, 1))}.border-slate-700\/80{border-color:rgb(51 65 85 / 0.8)}.border-slate-800{--tw-border-opacity:1;border-color:rgb(30 41 59 / var(--tw-border-opacity, 1))}.border-slate-800\/80{border-color:rgb(30 41 59 / 0.8)}.bg-\[\#0b0f19\]{--tw-bg-opacity:1;background-color:rgb(11 15 25 / var(--tw-bg-opacity, 1))}.bg-\[\#0d131f\]{--tw-bg-opacity:1;background-color:rgb(13 19 31 / var(--tw-bg-opacity, 1))}.bg-\[\#0f172a\]{--tw-bg-opacity:1;background-color:rgb(15 23 42 / var(--tw-bg-opacity, 1))}.bg-\[\#111827\]{--tw-bg-opacity:1;background-color:rgb(17 24 39 / var(--tw-bg-opacity, 1))}.bg-\[\#111827\]\/80{background-color:rgb(17 24 39 / 0.8)}.bg-\[\#111827\]\/90{background-color:rgb(17 24 39 / 0.9)}.bg-\[\#131d2e\]{--tw-bg-opacity:1;background-color:rgb(19 29 46 / var(--tw-bg-opacity, 1))}.bg-\[\#141d2e\]{--tw-bg-opacity:1;background-color:rgb(20 29 46 / var(--tw-bg-opacity, 1))}.bg-\[\#182234\]{--tw-bg-opacity:1;background-color:rgb(24 34 52 / var(--tw-bg-opacity, 1))}.bg-\[\#1a2333\]{--tw-bg-opacity:1;background-color:rgb(26 35 51 / var(--tw-bg-opacity, 1))}.bg-\[\#1e293b\]{--tw-bg-opacity:1;background-color:rgb(30 41 59 / var(--tw-bg-opacity, 1))}.bg-amber-500\/20{background-color:rgb(245 158 11 / 0.2)}.bg-amber-600{--tw-bg-opacity:1;background-color:rgb(217 119 6 / var(--tw-bg-opacity, 1))}.bg-black\/70{background-color:rgb(0 0 0 / 0.7)}.bg-blue-600{--tw-bg-opacity:1;background-color:rgb(37 99 235 / var(--tw-bg-opacity, 1))}.bg-blue-600\/20{background-color:rgb(37 99 235 / 0.2)}.bg-emerald-500{--tw-bg-opacity:1;background-color:rgb(16 185 129 / var(--tw-bg-opacity, 1))}.bg-emerald-500\/20{background-color:rgb(16 185 129 / 0.2)}.bg-emerald-600{--tw-bg-opacity:1;background-color:rgb(5 150 105 / var(--tw-bg-opacity, 1))}.bg-slate-700{--tw-bg-opacity:1;background-color:rgb(51 65 85 / var(--tw-bg-opacity, 1))}.bg-slate-800{--tw-bg-opacity:1;background-color:rgb(30 41 59 / var(--tw-bg-opacity, 1))}.bg-slate-800\/80{background-color:rgb(30 41 59 / 0.8)}.bg-slate-900{--tw-bg-opacity:1;background-color:rgb(15 23 42 / var(--tw-bg-opacity, 1))}.bg-slate-900\/60{background-color:rgb(15 23 42 / 0.6)}.bg-transparent{background-color:transparent}.bg-white{--tw-bg-opacity:1;background-color:rgb(255 255 255 / var(--tw-bg-opacity, 1))}.bg-blue-600\/10{background-color:rgb(37 99 235 / 0.1)}.bg-gradient-to-br{background-image:linear-gradient(to bottom right, var(--tw-gradient-stops))}.from-\[\#090d16\]{--tw-gradient-from:#090d16 var(--tw-gradient-from-position);--tw-gradient-to:rgb(9 13 22 / 0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from), var(--tw-gradient-to)}.via-\[\#111827\]{--tw-gradient-to:rgb(17 24 39 / 0)  var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from), #111827 var(--tw-gradient-via-position), var(--tw-gradient-to)}.to-\[\#0f172a\]{--tw-gradient-to:#0f172a var(--tw-gradient-to-position)}.p-1\.5{padding:0.375rem}.p-2{padding:0.5rem}.p-2\.5{padding:0.625rem}.p-3{padding:0.75rem}.p-4{padding:1rem}.p-5{padding:1.25rem}.p-6{padding:1.5rem}.p-8{padding:2rem}.px-1\.5{padding-left:0.375rem;padding-right:0.375rem}.px-2{padding-left:0.5rem;padding-right:0.5rem}.px-2\.5{padding-left:0.625rem;padding-right:0.625rem}.px-3{padding-left:0.75rem;padding-right:0.75rem}.px-4{padding-left:1rem;padding-right:1rem}.px-6{padding-left:1.5rem;padding-right:1.5rem}.py-0\.5{padding-top:0.125rem;padding-bottom:0.125rem}.py-1{padding-top:0.25rem;padding-bottom:0.25rem}.py-1\.5{padding-top:0.375rem;padding-bottom:0.375rem}.py-2{padding-top:0.5rem;padding-bottom:0.5rem}.py-2\.5{padding-top:0.625rem;padding-bottom:0.625rem}.py-3{padding-top:0.75rem;padding-bottom:0.75rem}.pb-2{padding-bottom:0.5rem}.pb-3{padding-bottom:0.75rem}.pl-4{padding-left:1rem}.pl-5{padding-left:1.25rem}.pt-3{padding-top:0.75rem}.text-left{text-align:left}.text-center{text-align:center}.text-right{text-align:right}.font-mono{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace}.font-sans{font-family:ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"}.text-2xl{font-size:1.5rem;line-height:2rem}.text-\[10px\]{font-size:10px}.text-\[11px\]{font-size:11px}.text-\[8px\]{font-size:8px}.text-lg{font-size:1.125rem;line-height:1.75rem}.text-sm{font-size:0.875rem;line-height:1.25rem}.text-xl{font-size:1.25rem;line-height:1.75rem}.text-xs{font-size:0.75rem;line-height:1rem}.font-bold{font-weight:700}.font-medium{font-weight:500}.font-semibold{font-weight:600}.leading-relaxed{line-height:1.625}.tracking-wider{letter-spacing:0.05em}.text-amber-400{--tw-text-opacity:1;color:rgb(251 191 36 / var(--tw-text-opacity, 1))}.text-blue-400{--tw-text-opacity:1;color:rgb(96 165 250 / var(--tw-text-opacity, 1))}.text-blue-500{--tw-text-opacity:1;color:rgb(59 130 246 / var(--tw-text-opacity, 1))}.text-blue-900{--tw-text-opacity:1;color:rgb(30 58 138 / var(--tw-text-opacity, 1))}.text-emerald-400{--tw-text-opacity:1;color:rgb(52 211 153 / var(--tw-text-opacity, 1))}.text-purple-400{--tw-text-opacity:1;color:rgb(192 132 252 / var(--tw-text-opacity, 1))}.text-red-400{--tw-text-opacity:1;color:rgb(248 113 113 / var(--tw-text-opacity, 1))}.text-slate-100{--tw-text-opacity:1;color:rgb(241 245 249 / var(--tw-text-opacity, 1))}.text-slate-200{--tw-text-opacity:1;color:rgb(226 232 240 / var(--tw-text-opacity, 1))}.text-slate-300{--tw-text-opacity:1;color:rgb(203 213 225 / var(--tw-text-opacity, 1))}.text-slate-400{--tw-text-opacity:1;color:rgb(148 163 184 / var(--tw-text-opacity, 1))}.text-slate-500{--tw-text-opacity:1;color:rgb(100 116 139 / var(--tw-text-opacity, 1))}.text-slate-900{--tw-text-opacity:1;color:rgb(15 23 42 / var(--tw-text-opacity, 1))}.text-white{--tw-text-opacity:1;color:rgb(255 255 255 / var(--tw-text-opacity, 1))}.accent-blue-600{accent-color:#2563eb}.shadow{--tw-shadow:0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);--tw-shadow-colored:0 1px 3px 0 var(--tw-shadow-color), 0 1px 2px -1px var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)}.shadow-2xl{--tw-shadow:0 25px 50px -12px rgb(0 0 0 / 0.25);--tw-shadow-colored:0 25px 50px -12px var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)}.shadow-lg{--tw-shadow:0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);--tw-shadow-colored:0 10px 15px -3px var(--tw-shadow-color), 0 4px 6px -4px var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)}.shadow-amber-600\/30{--tw-shadow-color:rgb(217 119 6 / 0.3);--tw-shadow:var(--tw-shadow-colored)}.shadow-blue-600\/30{--tw-shadow-color:rgb(37 99 235 / 0.3);--tw-shadow:var(--tw-shadow-colored)}.shadow-emerald-600\/30{--tw-shadow-color:rgb(5 150 105 / 0.3);--tw-shadow:var(--tw-shadow-colored)}.outline-none{outline:2px solid transparent;outline-offset:2px}.drop-shadow-2xl{--tw-drop-shadow:drop-shadow(0 25px 25px rgb(0 0 0 / 0.15));filter:var(--tw-blur) var(--tw-brightness) var(--tw-contrast) var(--tw-grayscale) var(--tw-hue-rotate) var(--tw-invert) var(--tw-saturate) var(--tw-sepia) var(--tw-drop-shadow)}.drop-shadow-md{--tw-drop-shadow:drop-shadow(0 4px 3px rgb(0 0 0 / 0.07)) drop-shadow(0 2px 2px rgb(0 0 0 / 0.06));filter:var(--tw-blur) var(--tw-brightness) var(--tw-contrast) var(--tw-grayscale) var(--tw-hue-rotate) var(--tw-invert) var(--tw-saturate) var(--tw-sepia) var(--tw-drop-shadow)}.backdrop-blur-md{--tw-backdrop-blur:blur(12px);-webkit-backdrop-filter:var(--tw-backdrop-blur) var(--tw-backdrop-brightness) var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate) var(--tw-backdrop-sepia);backdrop-filter:var(--tw-backdrop-blur) var(--tw-backdrop-brightness) var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate) var(--tw-backdrop-sepia)}.backdrop-blur-sm{--tw-backdrop-blur:blur(4px);-webkit-backdrop-filter:var(--tw-backdrop-blur) var(--tw-backdrop-brightness) var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate) var(--tw-backdrop-sepia);backdrop-filter:var(--tw-backdrop-blur) var(--tw-backdrop-brightness) var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate) var(--tw-backdrop-sepia)}.transition{transition-property:color, background-color, border-color, fill, stroke, opacity, box-shadow, transform, filter, -webkit-text-decoration-color, -webkit-backdrop-filter;transition-property:color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter;transition-property:color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter, -webkit-text-decoration-color, -webkit-backdrop-filter;transition-timing-function:cubic-bezier(0.4, 0, 0.2, 1);transition-duration:150ms}.transition-all{transition-property:all;transition-timing-function:cubic-bezier(0.4, 0, 0.2, 1);transition-duration:150ms}.transition-opacity{transition-property:opacity;transition-timing-function:cubic-bezier(0.4, 0, 0.2, 1);transition-duration:150ms}.duration-300{transition-duration:300ms}.duration-500{transition-duration:500ms}.selection\:bg-blue-200 *::selection{--tw-bg-opacity:1;background-color:rgb(191 219 254 / var(--tw-bg-opacity, 1))}.selection\:bg-blue-200::selection{--tw-bg-opacity:1;background-color:rgb(191 219 254 / var(--tw-bg-opacity, 1))}.hover\:bg-amber-500:hover{--tw-bg-opacity:1;background-color:rgb(245 158 11 / var(--tw-bg-opacity, 1))}.hover\:bg-blue-500:hover{--tw-bg-opacity:1;background-color:rgb(59 130 246 / var(--tw-bg-opacity, 1))}.hover\:bg-emerald-500:hover{--tw-bg-opacity:1;background-color:rgb(16 185 129 / var(--tw-bg-opacity, 1))}.hover\:bg-slate-700:hover{--tw-bg-opacity:1;background-color:rgb(51 65 85 / var(--tw-bg-opacity, 1))}.hover\:bg-slate-800:hover{--tw-bg-opacity:1;background-color:rgb(30 41 59 / var(--tw-bg-opacity, 1))}.hover\:bg-slate-800\/40:hover{background-color:rgb(30 41 59 / 0.4)}.hover\:bg-slate-800\/50:hover{background-color:rgb(30 41 59 / 0.5)}.hover\:bg-slate-800\/60:hover{background-color:rgb(30 41 59 / 0.6)}.hover\:text-red-400:hover{--tw-text-opacity:1;color:rgb(248 113 113 / var(--tw-text-opacity, 1))}.hover\:text-white:hover{--tw-text-opacity:1;color:rgb(255 255 255 / var(--tw-text-opacity, 1))}.focus\:border-blue-500:focus{--tw-border-opacity:1;border-color:rgb(59 130 246 / var(--tw-border-opacity, 1))}.focus\:outline-none:focus{outline:2px solid transparent;outline-offset:2px}@media (min-width: 640px){.sm\:block{display:block}}@media (min-width: 768px){.md\:flex{display:flex}}@media (min-width: 1024px){.lg\:flex{display:flex}}</style></head>
+<body class="bg-[#0b0f19] text-slate-100 h-screen w-screen flex flex-col justify-between relative overflow-hidden">
+
+    <!-- DESKTOP WALLPAPER / BACKGROUND -->
+    <div id="desktop-bg" class="absolute inset-0 bg-gradient-to-br from-[#090d16] via-[#111827] to-[#0f172a] z-0 flex flex-col justify-between p-6">
         
-        // Simulate real API network request
-        await new Promise(r => setTimeout(r, 600));
-        setProgressPercent(55);
-        setProgressMessage("Backend GPU running Real-ESRGAN model...");
-        await new Promise(r => setTimeout(r, 800));
-
-        // Fallback execution to Canvas if local backend endpoint isn't alive
-        const result = await LocalEnhancementEngine.processImage(
-          originalImage,
-          settings,
-          (percent, msg) => {
-            setProgressPercent(50 + (percent * 0.5));
-            setProgressMessage(`[Server GPU] ${msg}`);
-          }
-        );
-        setEnhancedImage(result.dataUrl);
-        setProgressPercent(100);
-        log("API request completed with 200 OK.");
-      }
-    } catch (err) {
-      console.error(err);
-      setErrorMsg(`Enhancement process failed: ${err.message || 'Unknown processing error'}. Switched back to Canvas mode.`);
-      log(`[ERROR] ${err.message}`);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handleSliderMove = (clientX) => {
-    if (!sliderRef.current) return;
-    const rect = sliderRef.current.getBoundingClientRect();
-    const x = clientX - rect.left;
-    const width = rect.width;
-    let pos = (x / width) * 100;
-    if (pos < 0) pos = 0;
-    if (pos > 100) pos = 100;
-    setSliderPosition(pos);
-  };
-
-  const handleTouchMove = (e) => {
-    if (isDraggingSlider && e.touches[0]) {
-      handleSliderMove(e.touches[0].clientX);
-    }
-  };
-
-  const handleMouseMove = (e) => {
-    if (isDraggingSlider) {
-      handleSliderMove(e.clientX);
-    }
-  };
-
-  useEffect(() => {
-    const handleMouseUp = () => setIsDraggingSlider(false);
-    window.addEventListener('mouseup', handleMouseUp);
-    window.addEventListener('touchend', handleMouseUp);
-    return () => {
-      window.removeEventListener('mouseup', handleMouseUp);
-      window.removeEventListener('touchend', handleMouseUp);
-    };
-  }, []);
-
-  const handleDownload = () => {
-    if (!enhancedImage) return;
-    const link = document.createElement('a');
-    link.href = enhancedImage;
-    const ext = downloadFormat;
-    const baseName = imageMeta?.name ? imageMeta.name.split('.')[0] : 'photo';
-    link.download = `${baseName}_clearpix_enhanced.${ext}`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  const isDark = theme === 'dark';
-
-  return (
-    <div className={`min-h-screen font-sans transition-colors duration-300 ${
-      isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-800'
-    }`}>
-      {/* HEADER BAR */}
-      <header className={`sticky top-0 z-50 border-b backdrop-blur-md transition-colors ${
-        isDark ? 'bg-slate-900/80 border-slate-800' : 'bg-white/80 border-slate-200'
-      }`}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          
-          {/* Logo & Branding */}
-          <div className="flex items-center space-x-3 cursor-pointer" onClick={() => setActiveTab('app')}>
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-blue-500/25">
-              <Sparkles className="w-5 h-5 text-white animate-pulse" />
+        <!-- TOP STATUS / TASKBAR (WINDOWS 11 STYLE) -->
+        <header id="top-taskbar" class="h-12 bg-[#111827]/80 backdrop-blur-md border border-slate-800/80 rounded-xl px-4 flex items-center justify-between z-50 transition-opacity duration-300">
+            <div class="flex items-center space-x-4">
+                <div class="flex items-center space-x-2 bg-blue-600/20 px-3 py-1.5 rounded-lg border border-blue-500/30">
+                    <div class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></div>
+                    <span class="font-bold text-xs tracking-wider text-blue-400">PRO OFFICE WORKSPACE v3.2</span>
+                </div>
+                <div class="hidden md:flex items-center space-x-2 text-xs text-slate-400 border-l border-slate-700 pl-4">
+                    <span id="current-scenario-badge" class="bg-slate-800 px-2.5 py-1 rounded text-slate-300 font-medium">Skenario: Morning Routine</span>
+                    <span id="sim-status-indicator" class="text-emerald-400 font-semibold"><i class="fa-solid fa-circle-play mr-1"></i> Berjalan Otomatis</span>
+                </div>
             </div>
-            <div>
-              <span className="text-xl font-bold tracking-tight bg-gradient-to-r from-blue-500 to-indigo-400 bg-clip-text text-transparent">
-                ClearPix AI
-              </span>
-              <span className="hidden sm:inline-block ml-2 px-2 py-0.5 text-xs font-semibold rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                100% Face Preserved
-              </span>
+
+            <!-- Windows Center Taskbar Apps / Quick Launch -->
+            <div class="hidden lg:flex items-center space-x-2 bg-slate-900/60 px-3 py-1 rounded-lg border border-slate-800">
+                <button onclick="toggleWindow('email')" class="px-3 py-1 rounded hover:bg-slate-800 text-xs text-slate-300 flex items-center space-x-1.5 transition">
+                    <i class="fa-solid fa-envelope text-blue-400"></i><span>Outlook / Mail</span>
+                </button>
+                <button onclick="toggleWindow('report')" class="px-3 py-1 rounded hover:bg-slate-800 text-xs text-slate-300 flex items-center space-x-1.5 transition">
+                    <i class="fa-solid fa-file-word text-blue-400"></i><span>Report Editor</span>
+                </button>
+                <button onclick="toggleWindow('spreadsheet')" class="px-3 py-1 rounded hover:bg-slate-800 text-xs text-slate-300 flex items-center space-x-1.5 transition">
+                    <i class="fa-solid fa-file-excel text-emerald-400"></i><span>Excel Analytics</span>
+                </button>
+                <button onclick="toggleWindow('calendar')" class="px-3 py-1 rounded hover:bg-slate-800 text-xs text-slate-300 flex items-center space-x-1.5 transition">
+                    <i class="fa-solid fa-calendar text-amber-400"></i><span>Calendar</span>
+                </button>
+                <button onclick="toggleWindow('documents')" class="px-3 py-1 rounded hover:bg-slate-800 text-xs text-slate-300 flex items-center space-x-1.5 transition">
+                    <i class="fa-solid fa-folder-open text-purple-400"></i><span>Files</span>
+                </button>
             </div>
-          </div>
 
-          {/* Navigation Items */}
-          <nav className="flex items-center space-x-2 sm:space-x-4">
-            <button
-              onClick={() => setActiveTab('app')}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                activeTab === 'app'
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : isDark ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-              }`}
-            >
-              Enhancer
-            </button>
+            <!-- Right System Tray & Recording Control -->
+            <div class="flex items-center space-x-3">
+                <button onclick="openSettingsModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg text-xs font-medium flex items-center space-x-1.5 border border-slate-700 transition">
+                    <i class="fa-solid fa-gear"></i><span>Pengaturan</span>
+                </button>
+                <button onclick="toggleRecordingMode()" id="rec-mode-btn" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1.5 shadow-lg shadow-blue-600/30 transition">
+                    <i class="fa-solid fa-video"></i><span>Rec Mode (1080p)</span>
+                </button>
+                <div class="text-xs text-slate-300 font-mono bg-slate-900 px-2.5 py-1.5 rounded-lg border border-slate-800" id="clock-display">3:07 PM</div>
+            </div>
+        </header>
 
-            <button
-              onClick={() => setActiveTab('docs')}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium flex items-center space-x-1.5 transition-all ${
-                activeTab === 'docs'
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : isDark ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-              }`}
-            >
-              <Code className="w-4 h-4" />
-              <span>Backend & API</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('privacy')}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium flex items-center space-x-1.5 transition-all ${
-                activeTab === 'privacy'
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : isDark ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-              }`}
-            >
-              <ShieldCheck className="w-4 h-4" />
-              <span className="hidden sm:inline">Privacy</span>
-            </button>
-
-            {/* Theme Toggle */}
-            <button
-              onClick={toggleTheme}
-              className={`p-2 rounded-lg transition-colors ${
-                isDark ? 'bg-slate-800 text-amber-400 hover:bg-slate-700' : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
-              }`}
-              title="Toggle Dark/Light Mode"
-            >
-              {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-            </button>
-          </nav>
-        </div>
-      </header>
-
-      {/* MAIN CONTAINER */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-
-        {/* ERROR DISPLAY BANNER */}
-        {errorMsg && (
-          <div className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 flex items-start space-x-3 animate-fade-in">
-            <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5 text-red-400" />
-            <div className="flex-1 text-sm">{errorMsg}</div>
-            <button onClick={() => setErrorMsg(null)} className="text-red-400 hover:text-red-300 font-bold text-lg">&times;</button>
-          </div>
-        )}
-
-        {/* TAB 1: MAIN ENHANCER APPLICATION */}
-        {activeTab === 'app' && (
-          <div className="space-y-10">
-
-            {/* HERO SECTION */}
-            {!originalImage && (
-              <div className="text-center max-w-3xl mx-auto pt-6 pb-4 space-y-4">
-                <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-semibold">
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  <span>Zero Face Distortion Guarantee</span>
-                </div>
-                <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight">
-                  Turn Blurry Photos Into <br className="hidden sm:inline" />
-                  <span className="bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-400 bg-clip-text text-transparent">
-                    Crystal-Clear HD Images
-                  </span>
-                </h1>
-                <p className={`text-base sm:text-lg max-w-2xl mx-auto ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-                  Enhance your photos with AI while keeping the original face, details, eyes, and natural identity 100% intact. No fake hallucinated faces or artificial swaps.
-                </p>
-              </div>
-            )}
-
-            {/* UPLOAD & WORKSPACE AREA */}
-            {!originalImage ? (
-              <div className="max-w-2xl mx-auto">
-                <div
-                  onDrop={handleDrop}
-                  onDragOver={handleDragOver}
-                  onClick={() => fileInputRef.current?.click()}
-                  className={`border-2 border-dashed rounded-3xl p-8 sm:p-12 text-center cursor-pointer transition-all transform hover:scale-[1.01] ${
-                    isDark
-                      ? 'border-slate-800 bg-slate-900/50 hover:border-blue-500/50 hover:bg-slate-900'
-                      : 'border-slate-300 bg-white hover:border-blue-500 hover:bg-blue-50/50'
-                  } shadow-xl`}
-                >
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0])}
-                    accept="image/jpeg,image/jpg,image/png,image/webp"
-                    className="hidden"
-                  />
-                  <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/30">
-                    <Upload className="w-8 h-8" />
-                  </div>
-                  <h3 className="text-lg font-bold mb-1">
-                    Drag & drop your blurry photo here
-                  </h3>
-                  <p className={`text-sm mb-4 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                    or click to browse from your device
-                  </p>
-                  <div className="inline-flex items-center space-x-3 text-xs text-slate-400 bg-slate-800/40 px-3 py-1.5 rounded-full border border-slate-700/50">
-                    <span>JPG</span>
-                    <span>•</span>
-                    <span>PNG</span>
-                    <span>•</span>
-                    <span>WEBP</span>
-                    <span>•</span>
-                    <span>Max 10 MB</span>
-                  </div>
-                </div>
-
-                {/* FEATURE HIGHLIGHT CARDS */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-8">
-                  <div className={`p-4 rounded-2xl border ${isDark ? 'bg-slate-900/40 border-slate-800' : 'bg-white border-slate-200'}`}>
-                    <Lock className="w-5 h-5 text-blue-400 mb-2" />
-                    <h4 className="text-sm font-semibold">Face Identity Lock</h4>
-                    <p className={`text-xs mt-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                      Original facial bones, expression, and skin textures are strictly retained.
-                    </p>
-                  </div>
-                  <div className={`p-4 rounded-2xl border ${isDark ? 'bg-slate-900/40 border-slate-800' : 'bg-white border-slate-200'}`}>
-                    <Zap className="w-5 h-5 text-indigo-400 mb-2" />
-                    <h4 className="text-sm font-semibold">Smart Deblurring</h4>
-                    <p className={`text-xs mt-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                      Restores lost high-frequency details, eye reflections, and fine hair strands.
-                    </p>
-                  </div>
-                  <div className={`p-4 rounded-2xl border ${isDark ? 'bg-slate-900/40 border-slate-800' : 'bg-white border-slate-200'}`}>
-                    <Layers className="w-5 h-5 text-purple-400 mb-2" />
-                    <h4 className="text-sm font-semibold">2x / 4x Upscaling</h4>
-                    <p className={`text-xs mt-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                      Upscales resolution smoothly with intelligent spatial noise suppression.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-
-                {/* LEFT/MAIN COLUMN: PREVIEW & BEFORE/AFTER CANVAS */}
-                <div className="lg:col-span-8 space-y-4">
-                  <div className={`p-4 rounded-2xl border ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'} shadow-lg`}>
-                    
-                    {/* TOP ACTION BAR */}
-                    <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-800/50 flex-wrap gap-2">
-                      <div className="flex items-center space-x-3">
-                        <ImageIcon className="w-5 h-5 text-blue-400" />
-                        <div>
-                          <h3 className="text-sm font-bold truncate max-w-[200px] sm:max-w-[300px]">
-                            {imageMeta?.name}
-                          </h3>
-                          <span className="text-xs text-slate-400">
-                            {imageMeta?.width} × {imageMeta?.height} px • {imageMeta?.size}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center space-x-2">
-                        {enhancedImage && (
-                          <div className="flex bg-slate-800 p-0.5 rounded-lg">
-                            <button
-                              onClick={() => setViewMode('split')}
-                              className={`px-2.5 py-1 text-xs font-semibold rounded-md transition ${
-                                viewMode === 'split' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'
-                              }`}
-                            >
-                              Split Slider
-                            </button>
-                            <button
-                              onClick={() => setViewMode('side')}
-                              className={`px-2.5 py-1 text-xs font-semibold rounded-md transition ${
-                                viewMode === 'side' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'
-                              }`}
-                            >
-                              Side-by-Side
-                            </button>
-                          </div>
-                        )}
-
-                        <button
-                          onClick={() => {
-                            setOriginalImage(null);
-                            setEnhancedImage(null);
-                            setSelectedFile(null);
-                          }}
-                          className="px-3 py-1.5 text-xs font-medium text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition"
-                        >
-                          Change Photo
-                        </button>
-                      </div>
+        <!-- MAIN DESKTOP WORKSPACE AREA (WINDOWS CONTAINER) -->
+        <div id="workspace-desktop" class="relative flex-1 my-3 overflow-hidden">
+            
+            <!-- WINDOW 1: EMAIL MANAGEMENT (OUTLOOK STYLE) -->
+            <div id="win-email" class="app-window absolute top-4 left-4 w-[720px] h-[580px] bg-[#111827] rounded-xl flex flex-col overflow-hidden z-20 cursor-move" onmousedown="bringToFront('win-email')" style="z-index: 51; left: 697px; top: -1px; display: flex;">
+                <!-- Window Titlebar -->
+                <div class="bg-[#1e293b] px-4 py-2.5 flex items-center justify-between border-b border-slate-800 select-none">
+                    <div class="flex items-center space-x-2">
+                        <i class="fa-solid fa-envelope text-blue-400"></i>
+                        <span class="text-xs font-semibold text-slate-200">Outlook Professional - alexandra.chen@apexcorp.id</span>
                     </div>
+                    <div class="flex items-center space-x-2 text-slate-400">
+                        <button onclick="minimizeWindow('win-email')" class="hover:text-white px-1.5"><i class="fa-solid fa-minus text-xs"></i></button>
+                        <button onclick="maximizeWindow('win-email')" class="hover:text-white px-1.5"><i class="fa-solid fa-expand text-xs"></i></button>
+                        <button onclick="closeWindow('win-email')" class="hover:text-red-400 px-1.5"><i class="fa-solid fa-xmark text-xs"></i></button>
+                    </div>
+                </div>
+                <!-- Email Toolbar -->
+                <div class="bg-[#182234] px-4 py-2 border-b border-slate-800 flex items-center justify-between text-xs">
+                    <div class="flex items-center space-x-2">
+                        <button onclick="composeEmailModal()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded font-medium flex items-center space-x-1 transition shadow"><i class="fa-solid fa-pen-to-square mr-1"></i> New Email</button>
+                        <button onclick="refreshEmails()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded font-medium border border-slate-700 transition"><i class="fa-solid fa-rotate mr-1"></i> Send/Receive</button>
+                    </div>
+                    <div class="relative">
+                        <input type="text" id="email-search-input" placeholder="Search mail..." oninput="filterEmails(this.value)" class="bg-slate-900 border border-slate-700 rounded px-3 py-1 text-xs text-slate-200 focus:outline-none focus:border-blue-500 w-48">
+                        <i class="fa-solid fa-magnifying-glass absolute right-2.5 top-2 text-slate-500 text-xs"></i>
+                    </div>
+                </div>
+                <!-- Email Body Layout -->
+                <div class="flex-1 flex overflow-hidden">
+                    <!-- Folders Sidebar -->
+                    <div class="w-44 bg-[#0d131f] border-r border-slate-800 p-2 text-xs space-y-1">
+                        <button onclick="filterEmailFolder('inbox')" id="folder-inbox" class="w-full text-left px-3 py-2 rounded hover:bg-slate-800/60 text-slate-400 font-medium flex items-center space-x-2 transition"><span class="flex items-center"><i class="fa-solid fa-inbox w-5"></i> Inbox</span><span id="unread-count" class="bg-blue-600 text-white px-1.5 py-0.5 rounded-full text-[10px]">3</span></button>
+                        <button onclick="filterEmailFolder('sent')" id="folder-sent" class="w-full text-left px-3 py-2 rounded bg-blue-600/20 text-blue-400 font-medium flex items-center justify-between transition"><i class="fa-solid fa-paper-plane w-5"></i><span>Sent Items</span></button>
+                        <button onclick="filterEmailFolder('draft')" id="folder-draft" class="w-full text-left px-3 py-2 rounded hover:bg-slate-800/60 text-slate-400 font-medium flex items-center space-x-2 transition"><i class="fa-solid fa-file-pen w-5"></i><span>Drafts</span></button>
+                        <button onclick="filterEmailFolder('important')" id="folder-important" class="w-full text-left px-3 py-2 rounded hover:bg-slate-800/60 text-slate-400 font-medium flex items-center space-x-2 transition"><i class="fa-solid fa-star w-5 text-amber-400"></i><span>Important</span></button>
+                        <button onclick="filterEmailFolder('archived')" id="folder-archived" class="w-full text-left px-3 py-2 rounded hover:bg-slate-800/60 text-slate-400 font-medium flex items-center space-x-2 transition"><i class="fa-solid fa-box-archive w-5"></i><span>Archive</span></button>
+                        <button onclick="filterEmailFolder('spam')" id="folder-spam" class="w-full text-left px-3 py-2 rounded hover:bg-slate-800/60 text-slate-400 font-medium flex items-center space-x-2 transition"><i class="fa-solid fa-triangle-exclamation w-5 text-red-400"></i><span>Spam</span></button>
+                    </div>
+                    <!-- Email List -->
+                    <div class="w-72 bg-[#131d2e] border-r border-slate-800 overflow-y-auto" id="email-list-container"><div class="p-6 text-center text-slate-500 text-xs">Tidak ada email dalam folder ini</div></div>
+                    <!-- Email Content Preview -->
+                    <div class="flex-1 bg-[#111827] p-5 overflow-y-auto flex flex-col justify-between" id="email-detail-container">
+                <div>
+                    <div class="border-b border-slate-800 pb-3 mb-4">
+                        <h2 class="text-sm font-bold text-slate-100 mb-1">Important: Project Development Update</h2>
+                        <div class="flex items-center justify-between text-xs text-slate-400">
+                            <span>Dari: <strong class="text-slate-200">Sarah Jenkins (Project Lead)</strong> &lt;sarah.j@apexcorp.id&gt;</span>
+                            <span>08:20 AM</span>
+                        </div>
+                    </div>
+                    <div class="text-xs text-slate-300 leading-relaxed whitespace-pre-wrap font-sans">Hi Alexandra,
 
-                    {/* IMAGE CANVAS DISPLAY */}
-                    <div className="relative min-h-[350px] sm:min-h-[480px] bg-slate-950 rounded-xl overflow-hidden flex items-center justify-center select-none">
-                      
-                      {/* 1. PROCESSING LOADING OVERLAY */}
-                      {isProcessing && (
-                        <div className="absolute inset-0 z-30 bg-slate-950/85 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center space-y-4">
-                          <div className="relative w-16 h-16">
-                            <div className="absolute inset-0 rounded-full border-4 border-blue-500/20 border-t-blue-500 animate-spin" />
-                            <Sparkles className="w-8 h-8 text-blue-400 absolute inset-0 m-auto animate-pulse" />
-                          </div>
+Phase 2 of the cloud infrastructure migration has been completed successfully with zero downtime. Client feedback has been exceptionally positive.
 
-                          <div className="space-y-2 max-w-sm">
-                            <h4 className="text-base font-bold text-white">Enhancing Image Quality</h4>
-                            <p className="text-xs text-blue-400 font-medium">{progressMessage}</p>
+Warm regards,
+Sarah Jenkins</div>
+                </div>
+                <div class="mt-6 pt-3 border-t border-slate-800 flex items-center space-x-2">
+                    <button onclick="replyEmailModal('Sarah Jenkins (Project Lead)')" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded text-xs font-medium flex items-center space-x-1 shadow transition"><i class="fa-solid fa-reply mr-1"></i> Balas Cepat</button>
+                    <button onclick="archiveEmail(2)" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded text-xs font-medium border border-slate-700 transition"><i class="fa-solid fa-box-archive mr-1"></i> Arsipkan</button>
+                </div>
+            </div>
+                </div>
+            </div>
+
+            <!-- WINDOW 2: SPREADSHEET SIMULATOR (EXCEL STYLE) -->
+            <div id="win-spreadsheet" class="app-window absolute top-8 right-8 w-[760px] h-[520px] bg-[#111827] rounded-xl flex flex-col overflow-hidden z-20 cursor-move" onmousedown="bringToFront('win-spreadsheet')" style="z-index: 43; display: flex;">
+                <!-- Window Titlebar -->
+                <div class="bg-[#1e293b] px-4 py-2.5 flex items-center justify-between border-b border-slate-800 select-none">
+                    <div class="flex items-center space-x-2">
+                        <i class="fa-solid fa-file-excel text-emerald-400"></i>
+                        <span class="text-xs font-semibold text-slate-200">Excel - Q2_Financial_Performance_2026.xlsx</span>
+                    </div>
+                    <div class="flex items-center space-x-2 text-slate-400">
+                        <button onclick="minimizeWindow('win-spreadsheet')" class="hover:text-white px-1.5"><i class="fa-solid fa-minus text-xs"></i></button>
+                        <button onclick="maximizeWindow('win-spreadsheet')" class="hover:text-white px-1.5"><i class="fa-solid fa-expand text-xs"></i></button>
+                        <button onclick="closeWindow('win-spreadsheet')" class="hover:text-red-400 px-1.5"><i class="fa-solid fa-xmark text-xs"></i></button>
+                    </div>
+                </div>
+                <!-- Excel Ribbon Toolbar -->
+                <div class="bg-[#182234] px-4 py-1.5 border-b border-slate-800 flex items-center space-x-3 text-xs text-slate-300">
+                    <button class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 font-medium">File</button>
+                    <button class="px-2.5 py-1 rounded hover:bg-slate-800 font-medium">Home</button>
+                    <button class="px-2.5 py-1 rounded hover:bg-slate-800 font-medium">Insert</button>
+                    <button class="px-2.5 py-1 rounded hover:bg-slate-800 font-medium">Data</button>
+                    <button class="px-2.5 py-1 rounded hover:bg-slate-800 font-medium">Formulas</button>
+                    <div class="h-4 w-px bg-slate-700"></div>
+                    <button onclick="recalculateSpreadsheet()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1 rounded font-medium flex items-center space-x-1 shadow transition"><i class="fa-solid fa-calculator mr-1"></i> Auto-Sum &amp; Refresh</button>
+                </div>
+                <!-- Formula Bar -->
+                <div class="bg-[#0f172a] px-3 py-1.5 border-b border-slate-800 flex items-center space-x-3 text-xs">
+                    <span class="font-bold text-slate-400 code-font bg-slate-800 px-2 py-0.5 rounded">C4</span>
+                    <span class="text-slate-500 code-font">fx</span>
+                    <input type="text" id="formula-bar-input" readonly="" value="=SUM(C9:C11)" class="bg-transparent text-slate-200 code-font flex-1 focus:outline-none">
+                </div>
+                <!-- Spreadsheet Grid -->
+                <div class="flex-1 bg-[#0f172a] overflow-auto">
+                    <table class="w-full border-collapse text-xs code-font">
+                        <thead>
+                            <tr class="bg-[#182234] text-slate-400 sticky top-0 z-10">
+                                <th class="border border-slate-800 p-1.5 w-12 text-center">#</th>
+                                <th class="border border-slate-800 p-1.5 text-left px-3">A (Product)</th>
+                                <th class="border border-slate-800 p-1.5 text-center w-24">B (Sales)</th>
+                                <th class="border border-slate-800 p-1.5 text-right px-3 w-36">C (Revenue)</th>
+                                <th class="border border-slate-800 p-1.5 text-right px-3 w-36">D (Profit)</th>
+                                <th class="border border-slate-800 p-1.5 text-center w-24">E (Margin)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="spreadsheet-tbody" class="text-slate-300"><tr class="hover:bg-slate-800/40 transition border-b border-slate-800">
+                    <td class="border border-slate-800 p-1.5 text-center text-slate-500 bg-[#141d2e]">4</td>
+                    <td class="border border-slate-800 p-1.5 px-3 text-slate-200 font-medium">Product A (Enterprise SaaS)</td>
+                    <td class="border border-slate-800 p-1.5 text-center text-slate-300">125</td>
+                    <td class="border border-slate-800 p-1.5 px-3 text-right text-emerald-400">Rp 12.500.000</td>
+                    <td class="border border-slate-800 p-1.5 px-3 text-right text-blue-400">Rp 4.500.000</td>
+                    <td class="border border-slate-800 p-1.5 text-center text-slate-300">36.0%</td>
+                </tr><tr class="hover:bg-slate-800/40 transition border-b border-slate-800">
+                    <td class="border border-slate-800 p-1.5 text-center text-slate-500 bg-[#141d2e]">5</td>
+                    <td class="border border-slate-800 p-1.5 px-3 text-slate-200 font-medium">Product B (Cloud Storage Pro)</td>
+                    <td class="border border-slate-800 p-1.5 text-center text-slate-300">98</td>
+                    <td class="border border-slate-800 p-1.5 px-3 text-right text-emerald-400">Rp 9.800.000</td>
+                    <td class="border border-slate-800 p-1.5 px-3 text-right text-blue-400">Rp 3.200.000</td>
+                    <td class="border border-slate-800 p-1.5 text-center text-slate-300">32.6%</td>
+                </tr><tr class="hover:bg-slate-800/40 transition border-b border-slate-800">
+                    <td class="border border-slate-800 p-1.5 text-center text-slate-500 bg-[#141d2e]">6</td>
+                    <td class="border border-slate-800 p-1.5 px-3 text-slate-200 font-medium">Product C (AI Analytics Suite)</td>
+                    <td class="border border-slate-800 p-1.5 text-center text-slate-300">150</td>
+                    <td class="border border-slate-800 p-1.5 px-3 text-right text-emerald-400">Rp 15.000.000</td>
+                    <td class="border border-slate-800 p-1.5 px-3 text-right text-blue-400">Rp 6.000.000</td>
+                    <td class="border border-slate-800 p-1.5 text-center text-slate-300">40.0%</td>
+                </tr><tr class="hover:bg-slate-800/40 transition border-b border-slate-800">
+                    <td class="border border-slate-800 p-1.5 text-center text-slate-500 bg-[#141d2e]">7</td>
+                    <td class="border border-slate-800 p-1.5 px-3 text-slate-200 font-medium">Product D (Security Shield)</td>
+                    <td class="border border-slate-800 p-1.5 text-center text-slate-300">74</td>
+                    <td class="border border-slate-800 p-1.5 px-3 text-right text-emerald-400">Rp 7.400.000</td>
+                    <td class="border border-slate-800 p-1.5 px-3 text-right text-blue-400">Rp 2.100.000</td>
+                    <td class="border border-slate-800 p-1.5 text-center text-slate-300">28.3%</td>
+                </tr></tbody>
+                    </table>
+                </div>
+                <!-- Spreadsheet Footer Status -->
+                <div class="bg-[#182234] px-4 py-1.5 border-t border-slate-800 text-[11px] text-slate-400 flex justify-between items-center">
+                    <div class="flex items-center space-x-4">
+                        <span class="flex items-center text-emerald-400"><i class="fa-solid fa-circle text-[8px] mr-1.5"></i> Ready</span>
+                        <span>Sheet1: Q2 Performance</span>
+                    </div>
+                    <div>Average Profit Margin: <strong class="text-emerald-400">32.4%</strong></div>
+                </div>
+            </div>
+
+            <!-- WINDOW 3: REPORT EDITOR (MS WORD STYLE) -->
+            <div id="win-report" class="app-window absolute top-20 left-64 w-[680px] h-[540px] bg-[#111827] rounded-xl flex flex-col overflow-hidden z-30 cursor-move active" onmousedown="bringToFront('win-report')" style="z-index: 53; display: flex;">
+                <!-- Window Titlebar -->
+                <div class="bg-[#1e293b] px-4 py-2.5 flex items-center justify-between border-b border-slate-800 select-none">
+                    <div class="flex items-center space-x-2">
+                        <i class="fa-solid fa-file-word text-blue-400"></i>
+                        <span class="text-xs font-semibold text-slate-200">Word - Monthly_Business_Performance_Report_2026.docx</span>
+                    </div>
+                    <div class="flex items-center space-x-2 text-slate-400">
+                        <button onclick="minimizeWindow('win-report')" class="hover:text-white px-1.5"><i class="fa-solid fa-minus text-xs"></i></button>
+                        <button onclick="maximizeWindow('win-report')" class="hover:text-white px-1.5"><i class="fa-solid fa-expand text-xs"></i></button>
+                        <button onclick="closeWindow('win-report')" class="hover:text-red-400 px-1.5"><i class="fa-solid fa-xmark text-xs"></i></button>
+                    </div>
+                </div>
+                <!-- Word Ribbon Toolbar -->
+                <div class="bg-[#182234] px-3 py-1.5 border-b border-slate-800 flex items-center space-x-2 text-xs text-slate-300">
+                    <button onclick="formatReportText('bold')" class="p-1.5 hover:bg-slate-800 rounded text-slate-200" title="Bold"><i class="fa-solid fa-bold"></i></button>
+                    <button onclick="formatReportText('italic')" class="p-1.5 hover:bg-slate-800 rounded text-slate-200" title="Italic"><i class="fa-solid fa-italic"></i></button>
+                    <button onclick="formatReportText('underline')" class="p-1.5 hover:bg-slate-800 rounded text-slate-200" title="Underline"><i class="fa-solid fa-underline"></i></button>
+                    <div class="h-4 w-px bg-slate-700"></div>
+                    <button onclick="formatReportText('ul')" class="p-1.5 hover:bg-slate-800 rounded text-slate-200" title="Bullet List"><i class="fa-solid fa-list"></i></button>
+                    <button onclick="formatReportText('table')" class="p-1.5 hover:bg-slate-800 rounded text-slate-200" title="Insert Table"><i class="fa-solid fa-table"></i></button>
+                    <div class="h-4 w-px bg-slate-700"></div>
+                    <button onclick="triggerAutoTypingReport()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded font-medium flex items-center space-x-1 shadow transition"><i class="fa-solid fa-robot mr-1"></i> Auto-Type Report</button>
+                </div>
+                <!-- White Paper Container -->
+                <div class="flex-1 bg-[#1a2333] p-6 overflow-y-auto flex justify-center">
+                    <div class="w-full max-w-xl bg-white text-slate-900 p-8 shadow-2xl rounded min-h-[600px] font-sans selection:bg-blue-200">
+                        <div id="report-content-editable" contenteditable="true" class="outline-none space-y-4 text-xs leading-relaxed">
+                            <h1 class="text-lg font-bold text-slate-900 border-b pb-2">MONTHLY BUSINESS PERFORMANCE REPORT&nbsp;</h1>
+                            <p class="text-[11px] text-slate-500 font-mono">Date: June 2026 | Prepared by: CEO Office | Status: Confidential</p>
                             
-                            {/* Honest Progress Bar */}
-                            <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
-                              <div
-                                className="bg-gradient-to-r from-blue-500 to-indigo-500 h-full transition-all duration-300 rounded-full"
-                                style={{ width: `${progressPercent}%` }}
-                              />
-                            </div>
-                            <span className="text-xs text-slate-500 font-mono">{progressPercent}%</span>
-                          </div>
-
-                          {/* Live Console Output */}
-                          <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-lg p-2 text-left font-mono text-[10px] text-slate-400 max-h-24 overflow-y-auto">
-                            {processingLogs.map((lg, i) => (
-                              <div key={i} className="truncate">{lg}</div>
-                            ))}
-                          </div>
+                            <h2 class="font-bold text-sm text-blue-900 mt-4">1. Executive Summary</h2>
+                            <p>Apex Corporation demonstrated exceptional resilience and growth in Q2 2026, achieving a 24.5% year-over-year revenue increase across all regional divisions. Strategic partnerships and digital transformation initiatives have optimized operational margins significantly.</p>
+                            
+                            <h2 class="font-bold text-sm text-blue-900 mt-4">2. Business Performance &amp; Sales Overview</h2>
+                            <ul class="list-disc pl-5 space-y-1">
+                                <li>Product A sales surged by 18% following the Q2 marketing campaign.</li>
+                                <li>Enterprise client acquisition increased by 34% in the APAC sector.</li>
+                                <li>Customer satisfaction score reached an all-time high of 98.4%.</li>
+                            </ul>
+                            
+                            <h2 class="font-bold text-sm text-blue-900 mt-4">3. Financial Performance</h2>
+                            <p>Total revenue for the period reached Rp 37.300.000 with a net profit margin of 38.6%. Operational expenditures remained 12% below forecasted budgets due to cloud infrastructure optimization.</p>
+                            
+                            <h2 class="font-bold text-sm text-blue-900 mt-4">4. Future Strategy &amp; Conclusion</h2>
+                            <p>Moving into Q3, focus will shift toward AI-driven automation in customer support and expansion into European markets. All departmental heads are instructed to submit revised quarterly targets by Friday.</p><p><br></p>
                         </div>
-                      )}
-
-                      {/* 2. ENHANCED COMPARISON DISPLAY (WHEN DONE) */}
-                      {enhancedImage && !isProcessing ? (
-                        viewMode === 'split' ? (
-                          /* Interactive Split Comparison Slider */
-                          <div
-                            ref={sliderRef}
-                            onMouseDown={() => setIsDraggingSlider(true)}
-                            onTouchStart={() => setIsDraggingSlider(true)}
-                            onMouseMove={handleMouseMove}
-                            onTouchMove={handleTouchMove}
-                            className="relative w-full h-full min-h-[450px] flex items-center justify-center cursor-ew-resize overflow-hidden"
-                          >
-                            {/* Enhanced Image (Base layer) */}
-                            <img
-                              src={enhancedImage}
-                              alt="Enhanced"
-                              className="absolute inset-0 w-full h-full object-contain pointer-events-none"
-                            />
-
-                            {/* Original Image (Clipped overlay layer) */}
-                            <div
-                              className="absolute inset-0 overflow-hidden pointer-events-none"
-                              style={{ width: `${sliderPosition}%` }}
-                            >
-                              <img
-                                src={originalImage}
-                                alt="Original"
-                                className="absolute inset-0 w-full h-full object-contain max-w-none"
-                                style={{ width: sliderRef.current?.clientWidth || '100%', height: '100%' }}
-                              />
-                            </div>
-
-                            {/* Divider Line & Handle */}
-                            <div
-                              className="absolute top-0 bottom-0 w-0.5 bg-white shadow-2xl z-20 pointer-events-none"
-                              style={{ left: `${sliderPosition}%` }}
-                            >
-                              <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-8 h-8 rounded-full bg-white text-slate-900 shadow-xl flex items-center justify-center text-xs font-bold border border-slate-200">
-                                ↔
-                              </div>
-                            </div>
-
-                            {/* Labels */}
-                            <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-md text-[11px] font-bold text-white border border-white/10 z-10">
-                              ORIGINAL
-                            </div>
-                            <div className="absolute top-3 right-3 bg-blue-600/80 backdrop-blur-md px-2.5 py-1 rounded-md text-[11px] font-bold text-white border border-white/10 z-10">
-                              ENHANCED (HD)
-                            </div>
-                          </div>
-                        ) : (
-                          /* Side-by-Side Comparison */
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full p-2">
-                            <div className="relative rounded-lg overflow-hidden bg-slate-900 border border-slate-800">
-                              <span className="absolute top-2 left-2 bg-black/60 px-2 py-0.5 rounded text-[10px] font-bold">BEFORE</span>
-                              <img src={originalImage} alt="Before" className="w-full h-64 sm:h-96 object-contain" />
-                            </div>
-                            <div className="relative rounded-lg overflow-hidden bg-slate-900 border border-slate-800">
-                              <span className="absolute top-2 left-2 bg-blue-600/80 px-2 py-0.5 rounded text-[10px] font-bold">AFTER</span>
-                              <img src={enhancedImage} alt="After" className="w-full h-64 sm:h-96 object-contain" />
-                            </div>
-                          </div>
-                        )
-                      ) : (
-                        /* 3. ORIGINAL IMAGE PREVIEW BEFORE PROCESSING */
-                        <div className="relative w-full h-full flex items-center justify-center p-2">
-                          <img
-                            src={originalImage}
-                            alt="Original Preview"
-                            className="max-h-[480px] w-auto object-contain rounded-lg"
-                          />
-                        </div>
-                      )}
                     </div>
-                  </div>
+                </div>
+                <!-- Report Status Bar -->
+                <div class="bg-[#182234] px-4 py-1.5 border-t border-slate-800 text-[11px] text-slate-400 flex justify-between items-center">
+                    <span>Page 1 of 1 | 428 words</span>
+                    <span class="text-emerald-400"><i class="fa-solid fa-cloud-arrow-up mr-1"></i> Saved to Cloud</span>
+                </div>
+            </div>
 
-                  {/* DOWNLOAD BAR WHEN ENHANCEMENT COMPLETE */}
-                  {enhancedImage && !isProcessing && (
-                    <div className={`p-4 rounded-2xl border ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'} shadow-lg flex flex-col sm:flex-row items-center justify-between gap-4`}>
-                      <div className="flex items-center space-x-3">
-                        <CheckCircle2 className="w-6 h-6 text-emerald-400" />
+            <!-- WINDOW 4: CALENDAR & TASK MANAGEMENT -->
+            <div id="win-calendar" class="app-window absolute bottom-8 left-12 w-[420px] h-[380px] bg-[#111827] rounded-xl flex flex-col overflow-hidden z-10 cursor-move" onmousedown="bringToFront('win-calendar')">
+                <div class="bg-[#1e293b] px-4 py-2 flex items-center justify-between border-b border-slate-800 select-none">
+                    <div class="flex items-center space-x-2">
+                        <i class="fa-solid fa-calendar-days text-amber-400"></i>
+                        <span class="text-xs font-semibold text-slate-200">Calendar &amp; Task Schedule</span>
+                    </div>
+                    <div class="flex items-center space-x-2 text-slate-400">
+                        <button onclick="minimizeWindow('win-calendar')" class="hover:text-white px-1.5"><i class="fa-solid fa-minus text-xs"></i></button>
+                        <button onclick="closeWindow('win-calendar')" class="hover:text-red-400 px-1.5"><i class="fa-solid fa-xmark text-xs"></i></button>
+                    </div>
+                </div>
+                <div class="flex-1 bg-[#131d2e] p-4 overflow-y-auto text-xs space-y-3">
+                    <div class="flex items-center justify-between bg-slate-800/80 p-2.5 rounded-lg border border-slate-700">
+                        <div class="font-bold text-slate-200"><i class="fa-solid fa-calendar-check text-blue-400 mr-2"></i> Tuesday, 10 June 2026</div>
+                        <span class="bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded text-[10px] font-semibold">Active Day</span>
+                    </div>
+                    <div class="space-y-2">
+                        <div class="p-2.5 rounded bg-[#1e293b] border-l-4 border-blue-500 flex items-center justify-between">
+                            <div>
+                                <div class="font-semibold text-slate-200">09:00 AM - Check Business Emails</div>
+                                <div class="text-[11px] text-slate-400">Inbox review &amp; high-priority replies</div>
+                            </div>
+                            <span class="bg-blue-600/20 text-blue-400 px-2 py-0.5 rounded text-[10px]">Done</span>
+                        </div>
+                        <div class="p-2.5 rounded bg-[#1e293b] border-l-4 border-amber-500 flex items-center justify-between">
+                            <div>
+                                <div class="font-semibold text-slate-200">10:00 AM - Marketing Strategy Meeting</div>
+                                <div class="text-[11px] text-slate-400">Zoom Call with Regional Directors</div>
+                            </div>
+                            <span class="bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded text-[10px]">In Progress</span>
+                        </div>
+                        <div class="p-2.5 rounded bg-[#1e293b] border-l-4 border-purple-500 flex items-center justify-between">
+                            <div>
+                                <div class="font-semibold text-slate-200">11:30 AM - Review Financial Report</div>
+                                <div class="text-[11px] text-slate-400">Excel Q2 Spreadsheet audit</div>
+                            </div>
+                            <span class="bg-slate-700 text-slate-300 px-2 py-0.5 rounded text-[10px]">Upcoming</span>
+                        </div>
+                        <div class="p-2.5 rounded bg-[#1e293b] border-l-4 border-emerald-500 flex items-center justify-between">
+                            <div>
+                                <div class="font-semibold text-slate-200">01:00 PM - Client Communication</div>
+                                <div class="text-[11px] text-slate-400">Partnership Proposal review</div>
+                            </div>
+                            <span class="bg-slate-700 text-slate-300 px-2 py-0.5 rounded text-[10px]">Upcoming</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- WINDOW 5: FILE MANAGER (DOCUMENTS) -->
+            <div id="win-documents" class="app-window absolute bottom-12 right-16 w-[480px] h-[360px] bg-[#111827] rounded-xl flex flex-col overflow-hidden z-10 cursor-move hidden" onmousedown="bringToFront('win-documents')">
+                <div class="bg-[#1e293b] px-4 py-2 flex items-center justify-between border-b border-slate-800 select-none">
+                    <div class="flex items-center space-x-2">
+                        <i class="fa-solid fa-folder-open text-purple-400"></i>
+                        <span class="text-xs font-semibold text-slate-200">File Manager - Apex Cloud Storage</span>
+                    </div>
+                    <div class="flex items-center space-x-2 text-slate-400">
+                        <button onclick="minimizeWindow('win-documents')" class="hover:text-white px-1.5"><i class="fa-solid fa-minus text-xs"></i></button>
+                        <button onclick="closeWindow('win-documents')" class="hover:text-red-400 px-1.5"><i class="fa-solid fa-xmark text-xs"></i></button>
+                    </div>
+                </div>
+                <div class="flex-1 bg-[#131d2e] p-4 overflow-y-auto text-xs grid grid-cols-2 gap-3">
+                    <div onclick="openDocFile('Annual Business Report 2026.pdf')" class="bg-[#1e293b] hover:bg-slate-800 p-3 rounded-lg border border-slate-700/80 cursor-pointer flex items-center space-x-3 transition">
+                        <i class="fa-solid fa-file-pdf text-red-400 text-2xl"></i>
                         <div>
-                          <h4 className="text-sm font-bold">Enhancement Complete</h4>
-                          <p className="text-xs text-slate-400">High-definition result ready for download (No watermark)</p>
+                            <div class="font-semibold text-slate-200">Annual Business Report 2026.pdf</div>
+                            <div class="text-[10px] text-slate-400">2.4 MB • Modified Today</div>
                         </div>
-                      </div>
-
-                      <div className="flex items-center space-x-3 w-full sm:w-auto">
-                        <select
-                          value={downloadFormat}
-                          onChange={(e) => setDownloadFormat(e.target.value)}
-                          className={`px-3 py-2 rounded-lg text-xs font-semibold border ${
-                            isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-100 border-slate-300 text-slate-800'
-                          }`}
-                        >
-                          <option value="png">PNG (Lossless)</option>
-                          <option value="jpg">JPG (High Quality)</option>
-                        </select>
-
-                        <button
-                          onClick={handleDownload}
-                          className="flex-1 sm:flex-initial px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-bold text-sm shadow-lg shadow-emerald-500/20 flex items-center justify-center space-x-2 transition"
-                        >
-                          <Download className="w-4 h-4" />
-                          <span>Download HD Photo</span>
-                        </button>
-                      </div>
                     </div>
-                  )}
-                </div>
-
-                {/* RIGHT COLUMN: ENHANCEMENT CONFIGURATION PANEL */}
-                {}
-                <div className="lg:col-span-4 space-y-6">
-                  <div className={`p-5 rounded-2xl border ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'} shadow-lg space-y-5`}>
-                    
-                    <div className="flex items-center justify-between border-b border-slate-800/50 pb-3">
-                      <div className="flex items-center space-x-2">
-                        <Sliders className="w-4 h-4 text-blue-400" />
-                        <h3 className="text-base font-bold">Enhancement Settings</h3>
-                      </div>
-                      <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                        Pro Controls
-                      </span>
-                    </div>
-
-                    {/* ENGINE SELECTOR */}
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                        AI Processing Engine
-                      </label>
-                      <select
-                        value={settings.engine}
-                        onChange={(e) => setSettings({ ...settings, engine: e.target.value })}
-                        className={`w-full px-3 py-2 rounded-xl text-xs font-medium border ${
-                          isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-100 border-slate-300 text-slate-800'
-                        }`}
-                      >
-                        <option value="canvas">⚡ Local Browser Engine (Instant Canvas DSP)</option>
-                        <option value="gemini">🤖 Gemini 3.1 Flash Vision AI</option>
-                        <option value="api">⚙️ External Backend GPU API (/api/enhance)</option>
-                      </select>
-
-                      {settings.engine === 'gemini' && (
-                        <div className="mt-2 space-y-1">
-                          <input
-                            type="password"
-                            placeholder="Gemini API Key (Optional if pre-configured)"
-                            value={geminiApiKey}
-                            onChange={(e) => setGeminiApiKey(e.target.value)}
-                            className="w-full px-3 py-1.5 rounded-lg text-xs border border-slate-700 bg-slate-950 text-white"
-                          />
-                          <p className="text-[10px] text-slate-500">Uses Gemini 3.1 Flash Image model directly.</p>
+                    <div onclick="openDocFile('Marketing Strategy.docx')" class="bg-[#1e293b] hover:bg-slate-800 p-3 rounded-lg border border-slate-700/80 cursor-pointer flex items-center space-x-3 transition">
+                        <i class="fa-solid fa-file-word text-blue-400 text-2xl"></i>
+                        <div>
+                            <div class="font-semibold text-slate-200">Marketing Strategy.docx</div>
+                            <div class="text-[10px] text-slate-400">1.1 MB • Modified Yesterday</div>
                         </div>
-                      )}
                     </div>
-
-                    {/* ENHANCEMENT LEVEL */}
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                        Enhancement Intensity
-                      </label>
-                      <div className="grid grid-cols-3 gap-2">
-                        {['natural', 'balanced', 'high'].map((level) => (
-                          <button
-                            key={level}
-                            onClick={() => setSettings({ ...settings, enhancement: level })}
-                            className={`py-2 rounded-xl text-xs font-semibold capitalize border transition ${
-                              settings.enhancement === level
-                                ? 'bg-blue-600 border-blue-500 text-white shadow-md shadow-blue-500/20'
-                                : isDark ? 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white' : 'bg-slate-100 border-slate-200 text-slate-600'
-                            }`}
-                          >
-                            {level}
-                          </button>
-                        ))}
-                      </div>
+                    <div onclick="openDocFile('Financial Statement.xlsx')" class="bg-[#1e293b] hover:bg-slate-800 p-3 rounded-lg border border-slate-700/80 cursor-pointer flex items-center space-x-3 transition">
+                        <i class="fa-solid fa-file-excel text-emerald-400 text-2xl"></i>
+                        <div>
+                            <div class="font-semibold text-slate-200">Financial Statement.xlsx</div>
+                            <div class="text-[10px] text-slate-400">840 KB • Modified Today</div>
+                        </div>
                     </div>
-
-                    {/* UPSCALE RESOLUTION */}
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                        Upscale Resolution
-                      </label>
-                      <div className="grid grid-cols-2 gap-2">
-                        {['2x', '4x'].map((scale) => (
-                          <button
-                            key={scale}
-                            onClick={() => setSettings({ ...settings, upscale: scale })}
-                            className={`py-2 rounded-xl text-xs font-semibold border transition ${
-                              settings.upscale === scale
-                                ? 'bg-blue-600 border-blue-500 text-white shadow-md shadow-blue-500/20'
-                                : isDark ? 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white' : 'bg-slate-100 border-slate-200 text-slate-600'
-                            }`}
-                          >
-                            {scale} Upscale
-                          </button>
-                        ))}
-                      </div>
+                    <div onclick="openDocFile('Project Development.pdf')" class="bg-[#1e293b] hover:bg-slate-800 p-3 rounded-lg border border-slate-700/80 cursor-pointer flex items-center space-x-3 transition">
+                        <i class="fa-solid fa-file-pdf text-red-400 text-2xl"></i>
+                        <div>
+                            <div class="font-semibold text-slate-200">Project Development.pdf</div>
+                            <div class="text-[10px] text-slate-400">3.5 MB • 3 days ago</div>
+                        </div>
                     </div>
-
-                    {/* NOISE REDUCTION */}
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                        Noise Reduction
-                      </label>
-                      <div className="grid grid-cols-3 gap-2">
-                        {['low', 'medium', 'high'].map((nr) => (
-                          <button
-                            key={nr}
-                            onClick={() => setSettings({ ...settings, noiseReduction: nr })}
-                            className={`py-2 rounded-xl text-xs font-semibold capitalize border transition ${
-                              settings.noiseReduction === nr
-                                ? 'bg-blue-600 border-blue-500 text-white shadow-md shadow-blue-500/20'
-                                : isDark ? 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white' : 'bg-slate-100 border-slate-200 text-slate-600'
-                            }`}
-                          >
-                            {nr}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* FACE PRESERVATION GUARANTEE */}
-                    <div className="p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/20 space-y-1">
-                      <div className="flex items-center space-x-2 text-blue-400 text-xs font-bold">
-                        <ShieldCheck className="w-4 h-4 flex-shrink-0" />
-                        <span>Face Preservation: MAXIMUM</span>
-                      </div>
-                      <p className="text-[11px] text-slate-400 leading-relaxed">
-                        Protects original facial contours, eye shape, smile, and skin tone. Zero AI face distortion.
-                      </p>
-                    </div>
-
-                    {/* PROCESS BUTTON */}
-                    <button
-                      onClick={runEnhancement}
-                      disabled={isProcessing}
-                      className="w-full py-3.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-sm shadow-xl shadow-blue-500/25 flex items-center justify-center space-x-2 transition transform hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50"
-                    >
-                      <Sparkles className="w-4 h-4" />
-                      <span>{enhancedImage ? 'Re-Enhance Photo' : 'Enhance Photo — Free'}</span>
-                    </button>
-                  </div>
                 </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* TAB 2: BACKEND ARCHITECTURE & MODEL INTEGRATION GUIDE */}
-        {}
-        {activeTab === 'docs' && (
-          <div className="max-w-4xl mx-auto space-y-8">
-            <div className="text-center space-y-2">
-              <h2 className="text-2xl font-extrabold">Production Backend Architecture & AI Integration</h2>
-              <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-                ClearPix AI is engineered with an abstracted backend layer ready for Real-ESRGAN, SwinIR, or CodeFormer model deployment.
-              </p>
             </div>
 
-            {/* REST API ENDPOINT SPECIFICATION */}
-            <div className={`p-6 rounded-2xl border ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'} space-y-4`}>
-              <h3 className="text-lg font-bold flex items-center space-x-2">
-                <Code className="w-5 h-5 text-blue-400" />
-                <span>REST API Specification (`POST /api/enhance`)</span>
-              </h3>
-
-              <div className="font-mono text-xs bg-slate-950 p-4 rounded-xl text-slate-300 border border-slate-800 overflow-x-auto space-y-3">
-                <div className="text-blue-400 font-bold">POST /api/enhance</div>
-                <div>Headers: Content-Type: multipart/form-data</div>
-                <div className="text-slate-500">// Request Payload Parameters:</div>
-                <div>image: File (binary JPG/PNG/WebP, max 10MB)</div>
-                <div>enhancement_level: "natural" | "balanced" | "high"</div>
-                <div>upscale_factor: 2 | 4</div>
-                <div>noise_reduction: "low" | "medium" | "high"</div>
-                <div>face_preservation: "maximum"</div>
-              </div>
-            </div>
-
-            {/* PYTHON FASTAPI + REAL-ESRGAN BACKEND CODE */}
-            <div className={`p-6 rounded-2xl border ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'} space-y-4`}>
-              <h3 className="text-lg font-bold flex items-center space-x-2">
-                <FileText className="w-5 h-5 text-indigo-400" />
-                <span>Python FastAPI Real-ESRGAN Backend Server (`server.py`)</span>
-              </h3>
-
-              <pre className="font-mono text-xs bg-slate-950 p-4 rounded-xl text-emerald-400 border border-slate-800 overflow-x-auto">
-{`from fastapi import FastAPI, UploadFile, File, Form, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-import torch
-import cv2
-import numpy as np
-import io
-
-# Import Real-ESRGAN restoration engine
-from basicsr.archs.rrdbnet_arch import RRDBNet
-from realesrgan import RealESRGANer
-
-app = FastAPI(title="ClearPix AI Enhancement Backend")
-
-# Enable CORS for production web clients
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Initialize Real-ESRGAN model on GPU CUDA
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-model = RRDBNet(num_in_ch=3, num_out_ch=3, num_feat=64, num_block=23, num_grow_ch=32, scale=2)
-upsampler = RealESRGANer(
-    scale=2,
-    model_path='weights/RealESRGAN_x2plus.pth',
-    model=model,
-    tile=400,
-    tile_pad=10,
-    pre_pad=0,
-    half=True if torch.cuda.is_available() else False,
-    device=device
-)
-
-@app.post("/api/enhance")
-async def enhance_photo(
-    image: UploadFile = File(...),
-    enhancement_level: str = Form("natural"),
-    upscale_factor: int = Form(2)
-):
-    contents = await image.read()
-    nparr = np.frombuffer(contents, np.uint8)
-    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-
-    if img is None:
-        raise HTTPException(status_code=400, detail="Invalid image file format.")
-
-    # Execute Real-ESRGAN AI Super Resolution
-    output, _ = upsampler.enhance(img, outscale=upscale_factor)
-
-    # Encode back to PNG
-    _, encoded_img = cv2.imencode('.png', output)
-    
-    return {
-        "status": "success",
-        "metadata": {
-            "original_shape": img.shape,
-            "enhanced_shape": output.shape,
-            "face_preservation": "maximum"
-        },
-        "image_base64": encoded_img.tobytes().hex()
-    }`}
-              </pre>
-            </div>
-          </div>
-        )}
-
-        {/* TAB 3: PRIVACY & SECURITY COMMITMENT */}
-        {}
-        {activeTab === 'privacy' && (
-          <div className="max-w-3xl mx-auto space-y-6">
-            <div className="text-center space-y-2">
-              <ShieldCheck className="w-12 h-12 text-blue-400 mx-auto" />
-              <h2 className="text-2xl font-extrabold">Your Photos Are Private</h2>
-              <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-                ClearPix AI is designed with strict privacy controls to ensure user photo security.
-              </p>
-            </div>
-
-            <div className={`p-6 rounded-2xl border ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'} space-y-6`}>
-              <div className="flex items-start space-x-4">
-                <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                  <Lock className="w-5 h-5" />
-                </div>
-                <div>
-                  <h4 className="text-base font-bold">1. Zero Model Training Policy</h4>
-                  <p className={`text-xs mt-1 leading-relaxed ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-                    Your uploaded photos are strictly used to execute image restoration and upscaling for your active session. They are never used to train public machine learning or biometric models.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-start space-x-4">
-                <div className="p-2.5 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-                  <RefreshCw className="w-5 h-5" />
-                </div>
-                <div>
-                  <h4 className="text-base font-bold">2. Local Browser In-Memory Mode</h4>
-                  <p className={`text-xs mt-1 leading-relaxed ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-                    When using the default Local Browser Engine, your image data never leaves your device's browser context. Processing occurs directly inside HTML5 WebAssembly/Canvas memory.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-start space-x-4">
-                <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                  <CheckCircle2 className="w-5 h-5" />
-                </div>
-                <div>
-                  <h4 className="text-base font-bold">3. Immediate Temporary Cleanup</h4>
-                  <p className={`text-xs mt-1 leading-relaxed ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-                    If processed via external API endpoints, temporary cache files are automatically purged immediately after the output stream is delivered to your client session.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-      </main>
-
-      {/* FOOTER */}
-      <footer className={`mt-16 border-t ${isDark ? 'bg-slate-950 border-slate-900 text-slate-500' : 'bg-white border-slate-200 text-slate-500'} py-8 text-xs text-center`}>
-        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center space-x-2">
-            <Sparkles className="w-4 h-4 text-blue-500" />
-            <span className="font-bold text-slate-300">ClearPix AI</span>
-            <span>— Free AI Photo Enhancement & Identity Preservation</span>
-          </div>
-          <div>
-            <span>Developed with clean React & WebGPU/Canvas Engine architecture.</span>
-          </div>
         </div>
-      </footer>
+
+        <!-- BOTTOM CONTROLS & RECORDING HUD -->
+        <footer id="bottom-hud" class="h-16 bg-[#111827]/90 backdrop-blur-md border border-slate-800/80 rounded-xl px-6 flex items-center justify-between z-50 transition-all duration-300">
+            <div class="flex items-center space-x-3">
+                <button onclick="startSimulation()" id="btn-start" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg text-xs font-bold flex items-center space-x-2 shadow-lg shadow-emerald-600/30 transition">
+                    <i class="fa-solid fa-play"></i><span>START WORK</span>
+                </button>
+                <button onclick="pauseSimulation()" id="btn-pause" class="bg-amber-600 hover:bg-amber-500 text-white px-4 py-2 rounded-lg text-xs font-bold flex items-center space-x-2 shadow-lg shadow-amber-600/30 transition">
+                    <i class="fa-solid fa-pause"></i><span>PAUSE WORK</span>
+                </button>
+                <button onclick="resetSimulation()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-2 rounded-lg text-xs font-medium border border-slate-700 transition" title="Reset Simulation">
+                    <i class="fa-solid fa-rotate-right"></i>
+                </button>
+            </div>
+
+            <!-- Scenario Quick Selector -->
+            <div class="hidden md:flex items-center space-x-2">
+                <span class="text-xs text-slate-400 font-medium">Skenario:</span>
+                <select id="scenario-selector" onchange="changeScenario(this.value)" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500">
+                    <option value="morning">1. Morning Office Routine</option>
+                    <option value="email">2. Email Management &amp; Reply</option>
+                    <option value="report">3. Business Report Preparation</option>
+                    <option value="financial">4. Financial Analysis &amp; Excel</option>
+                    <option value="executive">5. Executive Working Mode</option>
+                </select>
+            </div>
+
+            <div class="flex items-center space-x-4">
+                <div class="text-xs text-slate-400 hidden sm:block">
+                    Status: <span id="hud-status-text" class="text-emerald-400 font-semibold animate-pulse">Simulasi Otomatis Berjalan (CEO Mode)</span>
+                </div>
+                <button onclick="toggleFullscreen()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-2 rounded-lg text-xs font-semibold flex items-center space-x-1.5 border border-slate-700 transition">
+                    <i class="fa-solid fa-expand"></i><span>Fullscreen</span>
+                </button>
+            </div>
+        </footer>
+
     </div>
-  );
-}
+
+    <!-- SIMULATED REALISTIC MOUSE CURSOR -->
+    <div id="simulated-cursor" class="fixed top-1/2 left-1/2 w-6 h-6 text-blue-500 pointer-events-none z-[99999] drop-shadow-2xl" style="transform: translate(1061.58px, 588.456px);">
+        <i class="fa-solid fa-arrow-pointer text-xl text-blue-400 drop-shadow-md"></i>
+    </div>
+
+    <!-- NOTIFICATION POPUP (TOAST) -->
+    <div id="toast-notification" class="fixed top-16 right-6 bg-[#1e293b] border border-slate-700 text-slate-100 px-4 py-3 rounded-xl shadow-2xl z-[99999] flex items-center space-x-3 transform transition-all duration-500">
+        <div id="toast-icon" class="w-8 h-8 rounded-lg bg-blue-600/20 text-blue-400 flex items-center justify-center font-bold"><i class="fa-solid fa-envelope"></i></div>
+        <div>
+            <div id="toast-title" class="text-xs font-bold text-slate-200">Outlook Auto-Sync</div>
+            <div id="toast-desc" class="text-[11px] text-slate-400">Membaca email masuk baru dari CFO.</div>
+        </div>
+    </div>
+
+    <!-- SETTINGS MODAL -->
+    <div id="settings-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-[99999] hidden flex items-center justify-center p-4">
+        <div class="bg-[#111827] border border-slate-700 rounded-2xl w-full max-w-md p-6 space-y-5 shadow-2xl">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h3 class="font-bold text-slate-100 flex items-center space-x-2">
+                    <i class="fa-solid fa-gear text-blue-400"></i><span>Pengaturan Simulasi Workspace</span>
+                </h3>
+                <button onclick="closeSettingsModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <div class="space-y-4 text-xs">
+                <div>
+                    <label class="block text-slate-300 font-medium mb-1">Kecepatan Mengetik &amp; Animasi</label>
+                    <select id="setting-speed" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-slate-200">
+                        <option value="1">Normal (Realistis)</option>
+                        <option value="2">Cepat (Untuk Preview)</option>
+                        <option value="0.5">Lambat (Slow Motion)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-slate-300 font-medium mb-1">Interval Email Masuk Otomatis</label>
+                    <select id="setting-interval" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-slate-200">
+                        <option value="15000">Setiap 15 Detik</option>
+                        <option value="30000" selected="">Setiap 30 Detik</option>
+                        <option value="60000">Setiap 1 Menit</option>
+                    </select>
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="text-slate-300 font-medium">Suara &amp; Efek Notifikasi</span>
+                    <input type="checkbox" id="setting-sound" checked="" class="w-4 h-4 accent-blue-600 rounded">
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="text-slate-300 font-medium">Randomize Background Activities</span>
+                    <input type="checkbox" id="setting-random" checked="" class="w-4 h-4 accent-blue-600 rounded">
+                </div>
+            </div>
+            <div class="flex justify-end space-x-3 pt-3 border-t border-slate-800">
+                <button onclick="closeSettingsModal()" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg font-semibold transition">Simpan &amp; Tutup</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- COMPOSE EMAIL MODAL -->
+    <div id="compose-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-[99999] flex items-center justify-center p-4 hidden">
+        <div class="bg-[#111827] border border-slate-700 rounded-2xl w-full max-w-lg p-6 space-y-4 shadow-2xl">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h3 class="font-bold text-slate-100 flex items-center space-x-2">
+                    <i class="fa-solid fa-pen-to-square text-blue-400"></i><span>New Message</span>
+                </h3>
+                <button onclick="closeComposeModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <div class="space-y-3 text-xs">
+                <div>
+                    <label class="block text-slate-400 mb-1">To:</label>
+                    <input type="text" id="compose-to" value="board.directors@apexcorp.id" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-slate-200">
+                </div>
+                <div>
+                    <label class="block text-slate-400 mb-1">Subject:</label>
+                    <input type="text" id="compose-subject" value="Strategic Project Update Q2 2026" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-slate-200">
+                </div>
+                <div>
+                    <label class="block text-slate-400 mb-1">Message:</label>
+                    <textarea id="compose-body" rows="5" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-slate-200 focus:outline-none">Dear Board of Directors,
+
+Here is our preliminary project development update for Q2. All core milestones have been successfully completed ahead of schedule.
+
+Best regards,
+Alexandra Chen
+CEO, Apex Corporation</textarea>
+                </div>
+            </div>
+            <div class="flex justify-end space-x-3 pt-3 border-t border-slate-800">
+                <button onclick="closeComposeModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded-lg font-medium">Batal</button>
+                <button onclick="sendComposedEmail()" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg font-semibold flex items-center space-x-1.5"><i class="fa-solid fa-paper-plane"></i><span>Kirim Email</span></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JAVASCRIPT LOGIC & AUTOMATION ENGINE -->
+    <script>
+        // --- DATA STATE & INITIALIZATION ---
+        let emailsData = [
+            {
+                id: 1,
+                sender: "Jonathan Vance (CFO)",
+                email: "jonathan.vance@apexcorp.id",
+                subject: "Monthly Business Performance Report",
+                date: "08:45 AM",
+                folder: "inbox",
+                unread: true,
+                body: "Dear Alexandra,\n\nI have attached the final audited figures for the Monthly Business Performance Report. Net revenue exceeded expectations by 14.2%.\n\nPlease review before our executive board meeting this afternoon.\n\nBest regards,\nJonathan Vance\nChief Financial Officer"
+            },
+            {
+                id: 2,
+                sender: "Sarah Jenkins (Project Lead)",
+                email: "sarah.j@apexcorp.id",
+                subject: "Important: Project Development Update",
+                date: "08:20 AM",
+                folder: "inbox",
+                unread: true,
+                body: "Hi Alexandra,\n\nPhase 2 of the cloud infrastructure migration has been completed successfully with zero downtime. Client feedback has been exceptionally positive.\n\nWarm regards,\nSarah Jenkins"
+            },
+            {
+                id: 3,
+                sender: "Marcus Sterling (Global Partners)",
+                email: "m.sterling@globalpartners.com",
+                subject: "Partnership Collaboration Proposal",
+                date: "Yesterday",
+                folder: "inbox",
+                unread: true,
+                body: "Dear CEO Office,\n\nWe would like to propose a strategic joint venture for the upcoming ASEAN tech summit in Singapore. Let us know when you have 15 minutes for a preliminary sync call.\n\nSincerely,\nMarcus Sterling"
+            },
+            {
+                id: 4,
+                sender: "HR Department",
+                email: "hr@apexcorp.id",
+                subject: "Client Meeting Schedule & Agenda",
+                date: "2 days ago",
+                folder: "archive",
+                unread: false,
+                body: "Reminder regarding the upcoming Q2 client reviews scheduled for this week. Please check your calendar for room allocations."
+            },
+            {
+                id: 5,
+                sender: "Billing & Finance",
+                email: "billing@apexcorp.id",
+                subject: "Invoice Payment Confirmation #INV-9821",
+                date: "3 days ago",
+                folder: "archive",
+                unread: false,
+                body: "Your cloud server hosting invoice #INV-9821 has been paid successfully via corporate wire transfer."
+            }
+        ];
+
+        let spreadsheetData = [
+            { product: "Product A (Enterprise SaaS)", sales: 125, revenue: "Rp 12.500.000", profit: "Rp 4.500.000", margin: "36.0%" },
+            { product: "Product B (Cloud Storage Pro)", sales: 98, revenue: "Rp 9.800.000", profit: "Rp 3.200.000", margin: "32.6%" },
+            { product: "Product C (AI Analytics Suite)", sales: 150, revenue: "Rp 15.000.000", profit: "Rp 6.000.000", margin: "40.0%" },
+            { product: "Product D (Security Shield)", sales: 74, revenue: "Rp 7.400.000", profit: "Rp 2.100.000", margin: "28.3%" },
+        ];
+
+        let currentFolder = 'inbox';
+        let selectedEmailId = null;
+        let isSimulationRunning = false;
+        let simulationInterval = null;
+        let cursorTargetElement = null;
+
+        // --- CLOCK TICKER ---
+        setInterval(() => {
+            const now = new Date();
+            let hours = now.getHours();
+            let minutes = now.getMinutes();
+            const ampm = hours >= 12 ? 'PM' : 'AM';
+            hours = hours % 12;
+            hours = hours ? hours : 12;
+            minutes = minutes < 10 ? '0' + minutes : minutes;
+            document.getElementById('clock-display').innerText = `${hours}:${minutes} ${ampm}`;
+        }, 1000);
+
+        // --- RENDER EMAIL LIST ---
+        function renderEmails() {
+            const container = document.getElementById('email-list-container');
+            container.innerHTML = '';
+            
+            const searchTerm = document.getElementById('email-search-input').value.toLowerCase();
+            const filtered = emailsBaseFilter().filter(e => 
+                e.subject.toLowerCase().includes(searchTerm) || 
+                e.sender.toLowerCase().includes(searchTerm)
+            );
+
+            if (filtered.length === 0) {
+                container.innerHTML = `<div class="p-6 text-center text-slate-500 text-xs">Tidak ada email dalam folder ini</div>`;
+                return;
+            }
+
+            filtered.forEach(email => {
+                const div = document.createElement('div');
+                div.className = `p-3 border-b border-slate-800/80 cursor-pointer transition hover:bg-slate-800/50 ${email.unread ? 'bg-blue-600/10 font-semibold' : ''} ${selectedEmailId === email.id ? 'bg-slate-800 border-l-4 border-blue-500' : ''}`;
+                div.onclick = () => selectEmail(email.id);
+                div.innerHTML = `
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="text-xs text-slate-200 truncate max-w-[150px]">${email.sender}</span>
+                        <span class="text-[10px] text-slate-400">${email.date}</span>
+                    </div>
+                    <div class="text-xs text-slate-300 truncate">${email.subject}</div>
+                    <div class="text-[11px] text-slate-500 truncate mt-0.5">${email.body.substring(0, 40)}...</div>
+                `;
+                container.appendChild(div);
+            });
+            updateUnreadBadge();
+        }
+
+        function emailsBaseFilter() {
+            if (currentFolder === 'inbox') return emailsData.filter(e => e.folder === 'inbox');
+            if (currentFolder === 'sent') return emailsData.filter(e => e.folder === 'sent');
+            if (currentFolder === 'draft') return emailsData.filter(e => e.folder === 'draft');
+            if (currentFolder === 'important') return emailsData.filter(e => e.unread);
+            if (currentFolder === 'archived') return emailsData.filter(e => e.folder === 'archive');
+            if (currentFolder === 'spam') return emailsData.filter(e => e.folder === 'spam');
+            return emailsData;
+        }
+
+        function filterEmailFolder(folder) {
+            currentFolder = folder;
+            ['inbox', 'sent', 'draft', 'important', 'archived', 'spam'].forEach(f => {
+                const btn = document.getElementById(`folder-${f}`);
+                if (btn) {
+                    btn.className = f === folder 
+                        ? "w-full text-left px-3 py-2 rounded bg-blue-600/20 text-blue-400 font-medium flex items-center justify-between transition"
+                        : "w-full text-left px-3 py-2 rounded hover:bg-slate-800/60 text-slate-400 font-medium flex items-center space-x-2 transition";
+                }
+            });
+            renderEmails();
+        }
+
+        function selectEmail(id) {
+            selectedEmailId = id;
+            const email = emailsData.find(e => e.id === id);
+            if (!email) return;
+            email.unread = false;
+            renderEmails();
+
+            const detailContainer = document.getElementById('email-detail-container');
+            detailContainer.innerHTML = `
+                <div>
+                    <div class="border-b border-slate-800 pb-3 mb-4">
+                        <h2 class="text-sm font-bold text-slate-100 mb-1">${email.subject}</h2>
+                        <div class="flex items-center justify-between text-xs text-slate-400">
+                            <span>Dari: <strong class="text-slate-200">${email.sender}</strong> &lt;${email.email}&gt;</span>
+                            <span>${email.date}</span>
+                        </div>
+                    </div>
+                    <div class="text-xs text-slate-300 leading-relaxed whitespace-pre-wrap font-sans">${email.body}</div>
+                </div>
+                <div class="mt-6 pt-3 border-t border-slate-800 flex items-center space-x-2">
+                    <button onclick="replyEmailModal('${email.sender}')" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded text-xs font-medium flex items-center space-x-1 shadow transition"><i class="fa-solid fa-reply mr-1"></i> Balas Cepat</button>
+                    <button onclick="archiveEmail(${email.id})" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded text-xs font-medium border border-slate-700 transition"><i class="fa-solid fa-box-archive mr-1"></i> Arsipkan</button>
+                </div>
+            `;
+        }
+
+        function updateUnreadBadge() {
+            const count = emailsData.filter(e => e.unread && e.folder === 'inbox').length;
+            document.getElementById('unread-count').innerText = count;
+        }
+
+        function filterEmails(val) {
+            renderEmails();
+        }
+
+        // --- RENDER SPREADSHEET ---
+        function renderSpreadsheet() {
+            const tbody = document.getElementById('spreadsheet-tbody');
+            tbody.innerHTML = '';
+            spreadsheetData.forEach((row, idx) => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-800/40 transition border-b border-slate-800";
+                tr.innerHTML = `
+                    <td class="border border-slate-800 p-1.5 text-center text-slate-500 bg-[#141d2e]">${idx + 4}</td>
+                    <td class="border border-slate-800 p-1.5 px-3 text-slate-200 font-medium">${row.product}</td>
+                    <td class="border border-slate-800 p-1.5 text-center text-slate-300">${row.sales}</td>
+                    <td class="border border-slate-800 p-1.5 px-3 text-right text-emerald-400">${row.revenue}</td>
+                    <td class="border border-slate-800 p-1.5 px-3 text-right text-blue-400">${row.profit}</td>
+                    <td class="border border-slate-800 p-1.5 text-center text-slate-300">${row.margin}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function recalculateSpreadsheet() {
+            showToast("Excel Formula Calculated", "Data penjualan Q2 berhasil disinkronisasi & direkap ulang.", "fa-calculator", "emerald");
+        }
+
+        // --- REPORT EDITOR FUNCTIONS ---
+        function formatReportText(command) {
+            if (command === 'bold') document.execCommand('bold', false, null);
+            if (command === 'italic') document.execCommand('italic', false, null);
+            if (command === 'underline') document.execCommand('underline', false, null);
+            if (command === 'ul') document.execCommand('insertUnorderedList', false, null);
+            if (command === 'table') {
+                const selection = window.getSelection();
+                if (selection.rangeCount > 0) {
+                    const range = selection.getRangeAt(0);
+                    const tableHTML = `<table class="w-full border-collapse border border-slate-400 my-3 text-xs"><tr><th class="border border-slate-400 p-1 bg-slate-200">Quarter</th><th class="border border-slate-400 p-1 bg-slate-200">Growth</th></tr><tr><td class="border border-slate-400 p-1">Q1</td><td class="border border-slate-400 p-1">+18.5%</td></tr></table>`;
+                    range.insertNode(range.createContextualFragment(tableHTML));
+                }
+            }
+        }
+
+        function triggerAutoTypingReport() {
+            showToast("Auto-Type Report", "Sistem sedang mengetik laporan bulanan secara otomatis...", "fa-robot", "blue");
+            const editor = document.getElementById('report-content-editable');
+            setTimeout(() => {
+                editor.innerHTML += `<p class="mt-3 text-emerald-700 font-semibold">[Automated Note]: Risk assessment review completed successfully with zero compliance discrepancies.</p>`;
+                showToast("Report Updated", "Laporan berhasil diperbarui oleh AI Assistant.", "fa-file-circle-check", "emerald");
+            }, 2500);
+        }
+
+        // --- WINDOW MANAGEMENT ---
+        let zIndexCounter = 40;
+
+        function bringToFront(winId) {
+            const win = document.getElementById(winId);
+            if (win) {
+                zIndexCounter++;
+                win.style.zIndex = zIndexCounter;
+                document.querySelectorAll('.app-window').forEach(w => w.classList.remove('active'));
+                win.classList.add('active');
+            }
+        }
+
+        function minimizeWindow(winId) {
+            const win = document.getElementById(winId);
+            if (win) win.style.display = 'none';
+        }
+
+        function maximizeWindow(winId) {
+            const win = document.getElementById(winId);
+            if (win) {
+                if (win.style.width === '100%') {
+                    win.style.width = '680px';
+                    win.style.height = '540px';
+                    win.style.top = '20px';
+                    win.style.left = '50px';
+                } else {
+                    win.style.width = '98vw';
+                    win.style.height = '88vh';
+                    win.style.top = '10px';
+                    win.style.left = '10px';
+                }
+            }
+        }
+
+        function closeWindow(winId) {
+            minimizeWindow(winId);
+        }
+
+        function toggleWindow(appName) {
+            const win = document.getElementById(`win-${appName}`);
+            if (win) {
+                if (win.style.display === 'none' || win.classList.contains('hidden')) {
+                    win.style.display = 'flex';
+                    win.classList.remove('hidden');
+                    bringToFront(`win-${appName}`);
+                } else {
+                    win.style.display = 'none';
+                }
+            }
+        }
+
+        // Draggable Windows Implementation
+        document.querySelectorAll('.app-window').forEach(windowEl => {
+            const titlebar = windowEl.querySelector('.bg-\\[\\#1e293b\\]');
+            let isDragging = false;
+            let startX, startY, initialX, initialY;
+
+            titlebar.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                startX = e.clientX;
+                startY = e.clientY;
+                const rect = windowEl.getBoundingClientRect();
+                initialX = rect.left;
+                initialY = rect.top;
+                bringToFront(windowEl.id);
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                const dx = e.clientX - startX;
+                const dy = e.clientY - startY;
+                windowEl.style.left = `${initialX + dx}px`;
+                windowEl.style.top = `${initialY + dy}px`;
+            });
+
+            document.addEventListener('mouseup', () => {
+                isDragging = false;
+            });
+        });
+
+        // --- MODALS ---
+        function openSettingsModal() {
+            document.getElementById('settings-modal').classList.remove('hidden');
+        }
+        function closeSettingsModal() {
+            document.getElementById('settings-modal').classList.add('hidden');
+        }
+        function composeEmailModal() {
+            document.getElementById('compose-modal').classList.remove('hidden');
+        }
+        function closeComposeModal() {
+            document.getElementById('compose-modal').classList.add('hidden');
+        }
+        function replyEmailModal(senderName) {
+            document.getElementById('compose-to').value = senderName.toLowerCase().replace(/[^a-z]/g, '') + '@apexcorp.id';
+            document.getElementById('compose-subject').value = "Re: Executive Discussion & Confirmation";
+            document.getElementById('compose-body').value = `Dear ${senderName},\n\nThank you for reaching out. I have reviewed the details and approve the proposed roadmap.\n\nBest regards,\nAlexandra Chen\nCEO, Apex Corporation`;
+            composeEmailModal();
+        }
+        function sendComposedEmail() {
+            closeComposeModal();
+            showToast("Email Terkirim", "Pesan berhasil dikirim ke server tujuan.", "fa-paper-plane", "blue");
+            emailsData.unshift({
+                id: Date.now(),
+                sender: "Alexandra Chen (You)",
+                email: "alexandra.chen@apexcorp.id",
+                subject: document.getElementById('compose-subject').value,
+                date: "Just now",
+                folder: "sent",
+                unread: false,
+                body: document.getElementById('compose-body').value
+            });
+            renderEmails();
+        }
+        function archiveEmail(id) {
+            const email = emailsData.find(e => e.id === id);
+            if (email) email.folder = 'archive';
+            renderEmails();
+            showToast("Diarsipkan", "Email berhasil dipindahkan ke arsip.", "fa-box-archive", "slate");
+        }
+        function refreshEmails() {
+            showToast("Sync Outlook", "Inbox berhasil diperbarui. Semua pesan sinkron.", "fa-rotate", "blue");
+            renderEmails();
+        }
+
+        // --- TOAST NOTIFICATION ---
+        function showToast(title, desc, iconClass = 'fa-envelope', color = 'blue') {
+            const toast = document.getElementById('toast-notification');
+            document.getElementById('toast-title').innerText = title;
+            document.getElementById('toast-desc').innerText = desc;
+            document.getElementById('toast-icon').innerHTML = `<i class="fa-solid ${iconClass}"></i>`;
+            
+            toast.classList.remove('translate-x-96');
+            setTimeout(() => {
+                toast.classList.add('translate-x-96');
+            }, 4000);
+        }
+
+        // --- AUTOMATIC WORK SIMULATION ENGINE ---
+        function startSimulation() {
+            if (isSimulationRunning) return;
+            isSimulationRunning = true;
+            document.getElementById('hud-status-text').innerText = "Simulasi Otomatis Berjalan (CEO Mode)";
+            document.getElementById('hud-status-text').className = "text-emerald-400 font-semibold animate-pulse";
+            showToast("Work Simulation Started", "Workspace berjalan otomatis untuk rekaman konten video.", "fa-play", "emerald");
+
+            // Automated loop actions
+            simulationInterval = setInterval(() => {
+                executeRandomWorkStep();
+            }, 8000);
+        }
+
+        function pauseSimulation() {
+            isSimulationRunning = false;
+            clearInterval(simulationInterval);
+            document.getElementById('hud-status-text').innerText = "Simulasi Dijeda (Paused)";
+            document.getElementById('hud-status-text').className = "text-amber-400 font-semibold";
+            showToast("Simulation Paused", "Aktivitas otomatis dihentikan sementara.", "fa-pause", "amber");
+        }
+
+        function resetSimulation() {
+            pauseSimulation();
+            showToast("Simulation Reset", "Workspace dikembalikan ke kondisi awal.", "fa-rotate-right", "slate");
+        }
+
+        function changeScenario(scenarioVal) {
+            const badge = document.getElementById('current-scenario-badge');
+            if (scenarioVal === 'morning') badge.innerText = "Skenario: Morning Routine";
+            if (scenarioVal === 'email') badge.innerText = "Skenario: Email Management";
+            if (scenarioVal === 'report') badge.innerText = "Skenario: Report Preparation";
+            if (scenarioVal === 'financial') badge.innerText = "Skenario: Financial Analysis";
+            if (scenarioVal === 'executive') badge.innerText = "Skenario: Executive Mode";
+            showToast("Scenario Switched", `Berpindah ke skenario ${badge.innerText}`, "fa-sliders", "blue");
+        }
+
+        function executeRandomWorkStep() {
+            const steps = [
+                () => {
+                    toggleWindow('email');
+                    showToast("Outlook Auto-Sync", "Membaca email masuk baru dari CFO.", "fa-envelope", "blue");
+                },
+                () => {
+                    toggleWindow('spreadsheet');
+                    recalculateSpreadsheet();
+                },
+                () => {
+                    toggleWindow('report');
+                    triggerAutoTypingReport();
+                },
+                () => {
+                    // Incoming new simulation email
+                    const newId = Date.now();
+                    emailsData.unshift({
+                        id: newId,
+                        sender: "Director of Operations",
+                        email: "ops@apexcorp.id",
+                        subject: "Urgent: Regional Expansion Review",
+                        date: "Just now",
+                        folder: "inbox",
+                        unread: true,
+                        body: "Hello Alexandra,\n\nWe have received the revised blueprint for the Jakarta regional office. Please authorize when ready."
+                    });
+                    renderEmails();
+                    showToast("Email Baru Masuk", "Pesan dari Director of Operations diterima.", "fa-envelope-circle-check", "emerald");
+                }
+            ];
+
+            const randomStep = steps[Math.floor(Math.random() * steps.length)];
+            randomStep();
+
+            // Move simulated cursor naturally across screen
+            const cursor = document.getElementById('simulated-cursor');
+            const rx = Math.random() * (window.innerWidth - 300) + 150;
+            const ry = Math.random() * (window.innerHeight - 300) + 150;
+            cursor.style.transform = `translate(${rx}px, ${ry}px)`;
+        }
+
+        // --- RECORDING MODE (FULLSCREEN 1080P CLEAN) ---
+        let isRecordingMode = false;
+        function toggleRecordingMode() {
+            isRecordingMode = !isRecordingMode;
+            const taskbar = document.getElementById('top-taskbar');
+            const hud = document.getElementById('bottom-hud');
+            const btn = document.getElementById('rec-mode-btn');
+
+            if (isRecordingMode) {
+                taskbar.style.opacity = '0';
+                taskbar.style.pointerEvents = 'none';
+                hud.style.opacity = '0';
+                hud.style.pointerEvents = 'none';
+                btn.innerHTML = `<i class="fa-solid fa-stop"></i><span>Exit Rec Mode</span>`;
+                btn.className = "bg-red-600 hover:bg-red-500 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1.5 shadow-lg shadow-red-600/30 transition";
+                showToast("Recording Mode Active", "UI taskbar disembunyikan untuk rekaman kamera HP bersih.", "fa-video", "red");
+                startSimulation();
+            } else {
+                taskbar.style.opacity = '1';
+                taskbar.style.pointerEvents = 'auto';
+                hud.style.opacity = '1';
+                hud.style.pointerEvents = 'auto';
+                btn.innerHTML = `<i class="fa-solid fa-video"></i><span>Rec Mode (1080p)</span>`;
+                btn.className = "bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1.5 shadow-lg shadow-blue-600/30 transition";
+            }
+        }
+
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => {
+                    console.error("Error attempting to enable fullscreen:", err);
+                });
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                }
+            }
+        }
+
+        // File manager document opener
+        function openDocFile(docName) {
+            if (docName.includes('Report') || docName.includes('Strategy')) {
+                toggleWindow('report');
+                showToast("Document Opened", `Membuka file dokumen: ${docName}`, "fa-file-word", "blue");
+            } else {
+                toggleWindow('spreadsheet');
+                showToast("Spreadsheet Opened", `Membuka file spreadsheet: ${docName}`, "fa-file-excel", "emerald");
+            }
+        }
+
+        // Initialize on load
+        window.onload = function() {
+            renderEmails();
+            renderSpreadsheet();
+            // Start default active window z-index
+            bringToFront('win-email');
+        };
+    </script>
+
+</body></html>
